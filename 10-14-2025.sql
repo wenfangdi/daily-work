@@ -1,3 +1,5 @@
+
+-- Igor remake block step tracker
 WITH seq AS (
   SELECT
     id_block,
