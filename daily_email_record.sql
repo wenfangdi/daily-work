@@ -150,7 +150,7 @@ from seg_col_product_output
 group by 1, 2, 3, 5
 order by 2, 3, 5;
 
--- for cycle time
+-- for cycle time---------------------------------------------------------------------------------------------------------------------------------------
 
    with 
    fs as ( -- flow segments
@@ -219,17 +219,17 @@ order by 2, 3, 5;
   select distinct seg_p.*, coalesce(t.cycle_hour_median, 0.01) as cycle_hour_median
   from seg_p 
   left join 
-  (select segment_name, '90d' as time_interval, -- count(child_plate) as child_count_with_data, avg(cycle_hour) as cycle_hour 
+  (select segment_name, '90d' as time_interval, 
   PERCENTILE_CONT(cycle_hour, 0.5) over (partition by segment_name) as cycle_hour_median,
   from cycle_time_per_block
   where segment_finish_time > timestamp_trunc(current_timestamp() - interval 90 day, day, 'America/Los_Angeles')
   UNION ALL
-  select segment_name, '30d' as time_interval, -- count(child_plate) as child_count_with_data, avg(cycle_hour) as cycle_hour 
+  select segment_name, '30d' as time_interval, 
   PERCENTILE_CONT(cycle_hour, 0.5) over (partition by segment_name) as cycle_hour_median,
   from cycle_time_per_block
   where segment_finish_time > timestamp_trunc(current_timestamp() - interval 30 day, day, 'America/Los_Angeles')
   UNION ALL
-  select segment_name, '7d' as time_interval, -- count(child_plate) as child_count_with_data, avg(cycle_hour) as cycle_hour 
+  select segment_name, '7d' as time_interval, 
   PERCENTILE_CONT(cycle_hour, 0.5) over (partition by segment_name) as cycle_hour_median,
   from cycle_time_per_block
   where segment_finish_time > timestamp_trunc(current_timestamp() - interval 7 day, day, 'America/Los_Angeles')) t
