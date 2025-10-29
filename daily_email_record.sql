@@ -31,6 +31,7 @@ throughput_raw as
     and ( (mh.step_name_next = '702020') or 
           (mh.step_name in (select step_name from step_table))
         )
+       -- and mh.material_type_in != 'Software Test'
     and end_time is not null
     ),
 throughput as (
