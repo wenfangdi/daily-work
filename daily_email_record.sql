@@ -152,23 +152,35 @@ order by 2, 3, 5;
 
 -- for cycle time---------------------------------------------------------------------------------------------------------------------------------------
 
-   with 
-   fs as ( -- flow segments
-    SELECT step_name, segment_name
+WITH
+fs AS ( -- flow segments (keep array order)
+    SELECT step_name, segment_name, pos
     FROM UNNEST([
-      STRUCT('702020' AS step_name, 'Core' AS segment_name),
+      STRUCT('702020' AS step_name, 'Core'        AS segment_name),
       ('702030','Core'),
       ('702035','Core'),
       ('703015','RIM'),
       ('703020','RIM'),
-      ('704020','TDL')
-    ])
-   ),
-   sc as ( --segment change
+      ('704020','SingulationParent'),
+      ('704035','SingulationParent'),
+      ('704040','SingulationParent'),
+      ('704050','SingulationParent'),
+      ('704060','SingulationChild'),
+      ('704062','SingulationChild'),
+      ('704070','SingulationChild'),
+      ('704105','Finish'),
+      ('704110','Finish'),
+      ('704115','Finish')
+    ]) WITH OFFSET AS pos
+  ),
+  sc as ( --segment change, do not make it automatic as there might be alternative flow and steps
     SELECT step_name,step_name_next, segment_name
     FROM UNNEST([
       STRUCT('702035' AS step_name,'703015' as step_name_next, 'Core' AS segment_name),
-      ('703020','704020', 'RIM')
+      ('703020','704020', 'RIM'),
+      ('704070','704105', 'SingulationParent'),
+      ('704070','704105', 'SingulationChild'),
+      ('704115','708015', 'Finish')
     ])
    ),
    blocks_to_search as (
@@ -207,32 +219,49 @@ order by 2, 3, 5;
     from record_raw
     group by 1, 2, 3
     ),
-  segments as 
-    (select segment_name, segment_rank from unnest(['Core', 'TDL', 'Split', 'Trim', 'Shave', 'TDL / Split', 'Trim / Shave']) segment_name with offset as segment_rank),
+  segments AS ( -- distinct segments + rank by first appearance
+    SELECT
+      segment_name,
+      DENSE_RANK() OVER (ORDER BY MIN(pos)) AS segment_rank
+    FROM fs
+    GROUP BY segment_name
+  ),
   periods as 
     (select period, period_rank from unnest(['90d', '30d', '7d']) period with offset as period_rank),
   seg_p as 
-    (select * from segments join periods on true)
-
-
---------------------------------------------------
-  select distinct seg_p.*, coalesce(t.cycle_hour_median, 0.01) as cycle_hour_median
+    (select * from segments join periods on true),
+output_with_singulation_separated as (
+      select distinct seg_p.*, coalesce(t.cycle_hour_median, 0.01) as cycle_hour_median
   from seg_p 
   left join 
-  (select segment_name, '90d' as time_interval, 
+  (select segment_name, '90d' as time_interval, -- count(child_plate) as child_count_with_data, avg(cycle_hour) as cycle_hour 
   PERCENTILE_CONT(cycle_hour, 0.5) over (partition by segment_name) as cycle_hour_median,
   from cycle_time_per_block
   where segment_finish_time > timestamp_trunc(current_timestamp() - interval 90 day, day, 'America/Los_Angeles')
   UNION ALL
-  select segment_name, '30d' as time_interval, 
+  select segment_name, '30d' as time_interval, -- count(child_plate) as child_count_with_data, avg(cycle_hour) as cycle_hour 
   PERCENTILE_CONT(cycle_hour, 0.5) over (partition by segment_name) as cycle_hour_median,
   from cycle_time_per_block
   where segment_finish_time > timestamp_trunc(current_timestamp() - interval 30 day, day, 'America/Los_Angeles')
   UNION ALL
-  select segment_name, '7d' as time_interval, 
+  select segment_name, '7d' as time_interval, -- count(child_plate) as child_count_with_data, avg(cycle_hour) as cycle_hour 
   PERCENTILE_CONT(cycle_hour, 0.5) over (partition by segment_name) as cycle_hour_median,
   from cycle_time_per_block
   where segment_finish_time > timestamp_trunc(current_timestamp() - interval 7 day, day, 'America/Los_Angeles')) t
   on seg_p.segment_name = t.segment_name
   and seg_p.period = t.time_interval
-  order by segment_rank, period_rank;
+
+  )
+
+-- Last merge two singulation into one
+select 
+case when segment_name like 'Singulation%' then 'Singulation'
+  ELSE segment_name end as segment,
+segment_rank,
+period,
+period_rank,
+sum(cycle_hour_median) as cycle_hour_median
+from output_with_singulation_separated
+group by 1,2,3,4
+  order by segment_rank, period_rank
+
