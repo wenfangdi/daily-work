@@ -188,6 +188,7 @@ fs AS ( -- flow segments (keep array order)
     join sc using(step_name, step_name_next) 
     where end_time > timestamp_trunc(current_timestamp() - interval 90 day, day, 'America/Los_Angeles')
     and end_time <  timestamp_trunc(current_timestamp(), day, 'America/Los_Angeles')
+    and flow_name_in = 'MPF'
     group by 1,2
     ),
   record_raw as (
@@ -208,6 +209,7 @@ fs AS ( -- flow segments (keep array order)
     where end_time > current_timestamp() - interval 365 day
     and step_name_next is not null
     and cycle_time is not null
+    and mh.flow_name_in = 'MPF'
     -- and material_type_in != 'Software Test'
     -- and segment_name in ('Coring', 'TDL','Shave/Trim')
     ),
