@@ -154,16 +154,16 @@ fs AS ( -- flow segments (keep array order)
       ('702035','Core'),
       ('703015','RIM'),
       ('703020','RIM'),
-      ('704020','SingulationParent'),
-      ('704035','SingulationParent'),
-      ('704040','SingulationParent'),
-      ('704050','SingulationParent'),
-      ('704060','SingulationChild'),
-      ('704062','SingulationChild'),
-      ('704070','SingulationChild'),
-      ('704105','Finish'),
-      ('704110','Finish'),
-      ('704115','Finish')
+      ('704020','TDL'),
+      ('704035','TDL/Split/Parent'),
+      ('704040','Split'),
+      ('704050','Split'),
+      ('704060','TDL/Split/Child'),
+      ('704062','TDL/Split/Child'),
+      ('704070','TDL/Split/Child'),
+      ('704105','Shave'),
+      ('704110','Trim'),
+      ('704115','Shave/Trim')
     ]) WITH OFFSET AS pos
   ),
   sc as ( --segment change, do not make it automatic as there might be alternative flow and steps
@@ -171,9 +171,13 @@ fs AS ( -- flow segments (keep array order)
     FROM UNNEST([
       STRUCT('702035' AS step_name,'703015' as step_name_next, 'Core' AS segment_name),
       ('703020','704020', 'RIM'),
-      ('704070','704105', 'SingulationParent'),
-      ('704070','704105', 'SingulationChild'),
-      ('704115','708015', 'Finish')
+      ('704020','704035', 'TDL'),
+      ('704035','704040', 'TDL/Split/Parent'),
+      ('704050','704060', 'Split'),
+      ('704070','704105','TDL/Split/Child'),
+      ('704105','704110','Shave'),
+      ('704110','704115','Trim'),
+      ('704115','704115','Shave/Trim')
     ])
    ),
    blocks_to_search as (
@@ -223,7 +227,7 @@ fs AS ( -- flow segments (keep array order)
     (select period, period_rank from unnest(['90d', '30d', '7d']) period with offset as period_rank),
   seg_p as 
     (select * from segments join periods on true),
-output_with_singulation_separated as (
+ouput_separated as (
       select distinct seg_p.*, coalesce(t.cycle_hour_median, 0.01) as cycle_hour_median
   from seg_p 
   left join 
@@ -244,17 +248,24 @@ output_with_singulation_separated as (
   on seg_p.segment_name = t.segment_name
   and seg_p.period = t.time_interval
 
+  ),
+  weighted_output as (
+    select segment_name, 
+    case when segment_name like '%/%' then 0.5 else 1 end as segment_weight, 
+    segment_rank,
+    split(segment_name,'/')[0] as segment_belong, period, period_rank, cycle_hour_median
+    from ouput_separated
+  UNION ALL
+    select segment_name, 
+    case when segment_name like '%/%' then 0.5 else 1 end as segment_weight, 
+    segment_rank,
+    split(segment_name,'/')[1] as segment_belong, period, period_rank, cycle_hour_median
+    from ouput_separated
+    where segment_name like '%/%'
   )
-
--- Last merge two singulation into one
-select 
-case when segment_name like 'Singulation%' then 'Singulation'
-  ELSE segment_name end as segment,
-segment_rank,
-period,
-period_rank,
-sum(cycle_hour_median) as cycle_hour_median
-from output_with_singulation_separated
-group by 1,2,3,4
-  order by segment_rank, period_rank
+select segment_belong as segment, period, period_rank,
+min(segment_rank) as segment_rank,
+sum(segment_weight * cycle_hour_median) as cycle_time_median
+from weighted_output
+group by 1,2,3
 
