@@ -7,7 +7,7 @@ with
       UNION ALL 
       SELECT '704020', '5-TDLed'
       UNION ALL
-      SELECT '704060', '6-Splitted' -- breeding
+      SELECT '704050', '6-Splitted' -- step before breeding
       UNION ALL
       SELECT '704110', '7-Trimmed'
       UNION ALL
