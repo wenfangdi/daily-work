@@ -1,15 +1,17 @@
 -- under new flow
-       with 
+with 
     step_table as (
       SELECT '702020' as step_name, '3-Cored' as segment
+      UNION ALL
+      SELECT '703020', '4-RIM'
       UNION ALL 
-      SELECT '704020', '4-TDLed'
+      SELECT '704020', '5-TDLed'
       UNION ALL
-      SELECT '704060', '5-Splitted' -- breeding
+      SELECT '704060', '6-Splitted' -- breeding
       UNION ALL
-      SELECT '704110', '6-Trimmed'
+      SELECT '704110', '7-Trimmed'
       UNION ALL
-      SELECT '704105', '7-Shaved'
+      SELECT '704105', '8-Shaved'
     ),
 throughput_raw as 
     (select   
@@ -37,7 +39,7 @@ throughput_raw as
 throughput as (
       select *,
       case 
-      when segment in ('2-Ingot In','3-Cored', '4-TDLed') then floor(IF(thickness != 0, thickness, 460)/460)*out
+      when segment in ('2-Ingot In','3-Cored', '4-RIM','5-TDLed') then floor(IF(thickness != 0, thickness, 460)/460)*out
       else out
       end as plate_count,
       master_product as plate_size, 
@@ -45,7 +47,7 @@ throughput as (
       where end_time BETWEEN timestamp_trunc(current_timestamp() - interval 14+1 day,DAY, "America/Los_Angeles") AND current_timestamp()
     ),
 segments as 
-    (select segment from unnest(['2-Ingot In','3-Cored', '4-TDLed', '5-Splitted','6-Trimmed','7-Shaved']) segment),
+    (select segment from step_table),
     periods as 
     (select period from unnest(['14d', '5d', '1d']) period),
     master_products as 
@@ -129,16 +131,7 @@ seg_col_product_output as (
     and master_products.master_product = yield.seed_type    
     )
 select 
-case 
-when segment = '1-Grown' then 'Ingots Grown'
-when segment = '2-Ingot In' then 'Ingots In@BE'
-when segment = '3-Cored' then 'Core'
-when segment = '4-TDLed' then 'TDL'
-when segment = '5-Splitted' then 'Split'
-when segment = '6-Trimmed' then 'Trim'
-when segment = '7-Shaved' then 'Shave'
-when segment = '8-Stock/30' then 'Stock/30'
-end as step, 
+segment, 
 safe_cast(left(segment, 1) as int64) - 1 as step_number,
 col as period,
 coalesce(sum(
@@ -150,7 +143,6 @@ plate_size,
 from seg_col_product_output
 group by 1, 2, 3, 5
 order by 2, 3, 5;
-
 -- for cycle time---------------------------------------------------------------------------------------------------------------------------------------
 
 WITH
