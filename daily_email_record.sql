@@ -1,36 +1,55 @@
 -- under new flow
 with 
     step_table as (
-      SELECT '702020' as step_name, '3-Cored' as segment
+      SELECT '702020' as step_name, 'Block Core' as segment, 'Block' as unit
       UNION ALL
-      SELECT '703020', '4-RIM'
+      SELECT '702030', 'Block Clean', 'Block'
       UNION ALL 
-      SELECT '704020', '5-TDLed'
+      SELECT '702035', 'Block Measure', 'Block'
+      UNION ALL 
+      SELECT '703015', 'RIM', 'Block'
+      UNION ALL 
+      SELECT '704020', 'TDL', 'Block'
+      UNION ALL 
+      SELECT '704035', 'Block De-RIM', 'Block'
       UNION ALL
-      SELECT '704050', '6-Splitted' -- step before breeding
+      SELECT '704050', 'Split Ingress', 'Block' -- step before breeding
+      UNION ALL 
+      SELECT '704062', 'Split Separate', 'Plate'
       UNION ALL
-      SELECT '704110', '7-Trimmed'
+      SELECT '704105', 'Shaved', 'Plate'
       UNION ALL
-      SELECT '704105', '8-Shaved'
+      SELECT '704110', 'Trimmed', 'Plate'
+      UNION ALL
+      SELECT '704115', 'Plate Measure', 'Plate'
     ),
+numbered_step AS (
+  SELECT
+    step_name,
+    segment,
+    unit,
+    ROW_NUMBER() OVER (ORDER BY step_name) + 2 AS step_order -- start from 3
+  FROM step_table
+),
 throughput_raw as 
     (select   
     '1x1' as master_product,
+    numbered_step.unit,
     end_time,
     timestamp_trunc(DATETIME(TIMESTAMP(end_time), "America/Los_Angeles"), DAY) as end_date_PST, 
-    IFNULL(step_table.segment, '2-Ingot In') as segment,
+    IFNULL(numbered_step.segment, 'Block QC') as segment,
     flow_name_in as flow_name,
     1 as out,
     bd.thickness,
     mh.id_block
     from
         `df-mes.mes_warehouse.block_step_tracker` mh
-    left join step_table on mh.step_name = step_table.step_name
+    left join numbered_step on mh.step_name = numbered_step.step_name
     left join df-max.raw_dfdb.block_dimensions bd
     on mh.id_block = bd.id_block
     where mh.flow_name_in in ('MPF I&D','MPF')
     and mh.end_time BETWEEN timestamp_trunc(current_timestamp() - interval 14+1 day,DAY, "America/Los_Angeles") AND timestamp_trunc(current_timestamp(),DAY, "America/Los_Angeles")
-    and ( (mh.step_name_next = '702020') or 
+    and ( (mh.step_name_next = '702020') or  -- add incoming block step here
           (mh.step_name in (select step_name from step_table))
         )
        -- and mh.material_type_in != 'Software Test'
@@ -39,21 +58,23 @@ throughput_raw as
 throughput as (
       select *,
       case 
-      when segment in ('2-Ingot In','3-Cored', '4-RIM','5-TDLed') then floor(IF(thickness != 0, thickness, 460)/460)*out
+      when unit = 'Block' then floor(IF(thickness != 0, thickness, 460)/460)*out
       else out
-      end as plate_count,
-      master_product as plate_size, 
+      end as plate_count
       from throughput_raw
       where end_time BETWEEN timestamp_trunc(current_timestamp() - interval 14+1 day,DAY, "America/Los_Angeles") AND current_timestamp()
     ),
 segments as 
-    (select segment from step_table),
+    (select segment,step_order from numbered_step
+    UNION ALL
+    select 'Block QC' as segment,2 as step_order -- add incoming block step order here
+    ),
     periods as 
     (select period from unnest(['14d', '5d', '1d']) period),
     master_products as 
-    (select master_product from unnest([ '1x1']) master_product),
+    (select master_product from unnest([ '1x1','2x2','D200']) master_product),
     seg_col as (
-    select segment, period, master_product as plate_size 
+    select segment,step_order, period, master_product
     from segments
     join periods
     on true
@@ -73,31 +94,32 @@ grown as (
       and r.seed_size_type != 'Others'
     ),    
 seg_col_product_output as (
-    select seg_col.segment, seg_col.period as col, seg_col.plate_size,
+    select seg_col.segment,step_order, seg_col.period as col, seg_col.master_product,
     d.output as output
     from seg_col
     left join 
-    (select segment, '14d' as period, plate_size, sum(plate_count) / 14 as output 
-    from throughput
-    group by segment, plate_size
+    (
+      select segment, '14d' as period, master_product, sum(plate_count) / 14 as output 
+      from throughput
+      group by segment, master_product
   UNION ALL
-    select segment, '5d' as period, plate_size, sum(plate_count) / 5 as output 
-    from throughput
-    where end_date_PST BETWEEN timestamp_trunc(datetime(current_timestamp() - interval 5+1 day, "America/Los_Angeles"), DAY) AND current_datetime()
-    group by segment, plate_size
+      select segment, '5d' as period, master_product, sum(plate_count) / 5 as output 
+      from throughput
+      where end_date_PST BETWEEN timestamp_trunc(datetime(current_timestamp() - interval 5+1 day, "America/Los_Angeles"), DAY) AND current_datetime()
+      group by segment, master_product
   UNION ALL
-    select segment, '1d' as period, plate_size, sum(plate_count) /1 as output 
-    from throughput
-    where end_date_PST BETWEEN timestamp_trunc(datetime(current_timestamp() - interval 1 day, "America/Los_Angeles"), DAY) AND current_datetime()
-    group by segment, plate_size
+      select segment, '1d' as period, master_product, sum(plate_count) /1 as output 
+      from throughput
+      where end_date_PST BETWEEN timestamp_trunc(datetime(current_timestamp() - interval 1 day, "America/Los_Angeles"), DAY) AND current_datetime()
+      group by segment, master_product
     ) d 
     on d.segment = seg_col.segment 
-    and d.plate_size = seg_col.plate_size 
+    and d.master_product = seg_col.master_product 
     and d.period = seg_col.period
 
     UNION ALL
 
-    select '1-Grown' as segment, periods.period, master_product, output
+    select 'Grown' as segment,1 as step_order, periods.period, master_product, output
     from periods 
     join master_products
     on true
@@ -132,15 +154,17 @@ seg_col_product_output as (
     )
 select 
 segment, 
-safe_cast(left(segment, 1) as int64) - 1 as step_number,
+step_order,
 col as period,
 coalesce(sum(
-    case when plate_size = '1x1' then output
-    when plate_size = '2x2' then output * 4
-    when plate_size = 'D200' then output * 36
+    case when master_product = '1x1' then output
+    when master_product = '2x2' then output * 4
+    when master_product = 'D200' then output * 36
     else output end), 0.01) as yield,
-plate_size,
+master_product,
 from seg_col_product_output
+-- where col = '14d'
+-- and master_product = '1x1'
 group by 1, 2, 3, 5
 order by 2, 3, 5;
 -- for cycle time---------------------------------------------------------------------------------------------------------------------------------------
