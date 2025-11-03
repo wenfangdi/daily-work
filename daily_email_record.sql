@@ -23,7 +23,11 @@ with
       UNION ALL
       SELECT '704110', 'Trimmed', 'Plate'
       UNION ALL
-      SELECT '704115', 'Plate QC', 'Plate'
+      SELECT '708015', 'Plate QC', 'Plate'
+      UNION ALL
+      SELECT '708018', 'Plate Final Clean','Plate'
+      UNION ALL 
+      SELECT '708020', 'Plate Ship','Plate'
 
     ),
 numbered_step AS (
@@ -193,7 +197,11 @@ fs AS ( -- flow segments (keep array order)
       ('704070','Plate Measure'),
       ('704105','Shave'),
       ('704110','Trim'),
-      ('704115','Plate QC')
+      ('704115','Plate QC'),
+      ('708015', 'Plate QC'),
+      ('708018', 'Plate Final Clean'),
+      ('708020', 'Plate Ship')
+
     ]) WITH OFFSET AS pos
   ),
   sc as ( --segment change, do not make it automatic as there might be alternative flow and steps
@@ -211,15 +219,20 @@ fs AS ( -- flow segments (keep array order)
       ('704070','704105','Plate Measure'),
       ('704105','704110','Shave'),
       ('704110','704115','Trim'),
-      ('704115','704115','Plate QC')
+      ('708015','708018','Plate QC'),
+      ('708018','708020', 'Plate Final Clean')
     ])
    ),
    blocks_to_search as (
     select
     id_block,sc.segment_name,
     max(end_time) as segment_finish_time
-    from `df-mes.mes_warehouse.block_step_tracker`
-    join sc using(step_name, step_name_next) 
+    from `df-mes.mes_warehouse.block_step_tracker` bst
+    join sc on (
+      (sc.step_name = bst.step_name and sc.step_name_next = bst.step_name_next)
+      OR
+      (bst.step_name = '708020' and sc.step_name = bst.step_name and end_time is not null)
+      )
     where end_time > timestamp_trunc(current_timestamp() - interval 90 day, day, 'America/Los_Angeles')
     and end_time <  timestamp_trunc(current_timestamp(), day, 'America/Los_Angeles')
     and flow_name_in = 'MPF'
@@ -286,6 +299,5 @@ output_separated as (
 
   )
 select * from output_separated
-from weighted_output
-group by 1,2,3
+order by segment_rank
 
