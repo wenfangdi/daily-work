@@ -17,11 +17,14 @@ with
       UNION ALL 
       SELECT '704062', 'Split Separate', 'Plate'
       UNION ALL
+      SELECT '704070', 'Plate Measure', 'Plate'
+      UNION ALL
       SELECT '704105', 'Shaved', 'Plate'
       UNION ALL
       SELECT '704110', 'Trimmed', 'Plate'
       UNION ALL
-      SELECT '704115', 'Plate Measure', 'Plate'
+      SELECT '704115', 'Plate QC', 'Plate'
+
     ),
 numbered_step AS (
   SELECT
