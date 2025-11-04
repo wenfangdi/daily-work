@@ -2,27 +2,11 @@
 with 
     step_table as (
   SELECT '702040' AS step_name, 'Block Prep'      AS segment, 'Block' AS unit UNION ALL
-  -- SELECT '702020', 'Block Core',                         'Block' UNION ALL
-  -- SELECT '702030', 'Edge Clean',                         'Block' UNION ALL
-  -- SELECT '702032', 'Post Core CharX',                    'Block' UNION ALL
-  -- SELECT '702035', 'Post Core Apex',                     'Block' UNION ALL
-  -- SELECT '702040', 'Block Prep',                          'Block' UNION ALL
 
-  -- SELECT '704020', 'Block TDL',                          'Block' UNION ALL
-  -- SELECT '704035', 'Block De-RIM & Clean',               'Block' UNION ALL
-  -- SELECT '704040', 'Split Ingress',                      'Block' UNION ALL
-  -- SELECT '704050', 'Split Separate',                     'Block' UNION ALL
-  -- SELECT '704060', 'Split Seed Breed',                   'Plate' UNION ALL
-
-  -- SELECT '704065', 'Post Split Plate CharX',             'Plate' UNION ALL
   SELECT '704070', 'Singulation',               'Plate' UNION ALL
 
-  -- SELECT '706015', 'Plate Shave',                        'Plate' UNION ALL
-  -- SELECT '706020', 'Plate Clean',                        'Plate' UNION ALL
   SELECT '706025', 'Basic Surfin',            'Plate' UNION ALL
 
-  -- SELECT '710010', 'Plate Trim',                         'Plate' UNION ALL
-  -- SELECT '710020', 'Post Trim Plate CharX',              'Plate' UNION ALL
   SELECT '710030', 'Finish',               'Plate'
 
     ),
@@ -173,56 +157,50 @@ WITH
 fs AS ( -- flow segments (keep array order)
     SELECT step_name, segment_name, pos
     FROM UNNEST([
-  STRUCT('702025' AS step_name, 'Pre Core Block QC'      AS segment_name),
-  ('702020','Block Core'),
-  ('702030','Edge Clean'),
-  ('702032','Post Core CharX'),
-  ('702035','Post Core Apex'),
-  ('702040','Block RIM'),
+  STRUCT('702005' AS step_name, 'Block Prep'      AS segment_name),
+  ('702020','Block Prep'),
+  ('702030','Block Prep'),
+  ('702033','Block Prep'),
+  ('702035','Block Prep'),
+  ('702038','Block Prep'),
+  ('702040','Block Prep'),
 
-  ('704020','Block TDL'),
-  ('704035','Block De-RIM & Clean'),
-  ('704040','Split Ingress'),
-  ('704050','Split Separate'),
-  ('704060','Split Seed Breed'),
+  ('704020','Singulation/parent'),
+  ('704035','Singulation/parent'),
+  ('704040','Singulation/parent'),
+  ('704050','Singulation/parent'),
 
-  ('704065','Post Split Plate CharX'),
-  ('704070','Post Split Plate FRT'),
+  ('704060','Singulation/child'),
+  ('704066','Singulation/child'),
+  ('704070','Singulation/child'),
 
-  ('706015','Plate Shave'),
-  ('706020','Plate Clean'),
-  ('706021','Plate Clean Passthrough'),
+  ('706015','Basic Surfin'),
+  ('706020','Basic Surfin'),
+  ('706025','Basic Surfin'),
 
-  ('710010','Plate Trim'),
-  ('710020','Post Trim Plate CharX'),
-  ('710030','Post Trim Plate Apex')
+  ('710010','Finish'),
+  ('710020','Finish'),
+  ('710030','Finish')
 
     ]) WITH OFFSET AS pos
   ),
-  -- sc as ( --segment change, do not make it automatic as there might be alternative flow and steps
-  --   SELECT step_name,step_name_next, segment_name
-  --   FROM UNNEST([
-  --     STRUCT('701025' AS step_name, '702020' AS step_name_next, 'Block QC' AS segment_name),
-  --     ('702020','702030','Block Core'),
-  --     ('702030','702035','Block Clean'),
-  --     ('702035','703015','Block Measure'),
-  --     ('703020','704020','RIM'),
-  --     ('704020','704035','TDL'),
-  --     ('704035','704040','Block De-RIM'),
-  --     ('704050','704060','Split Ingress'),
-  --     ('704062','704070','Split Separate'),
-  --     ('704070','704105','Plate Measure'),
-  --     ('704105','704110','Shave'),
-  --     ('704110','704115','Trim'),
-  --     ('708015','708018','Plate QC'),
-  --     ('708018','708020', 'Plate Final Clean')
-  --   ])
-  --  ),
+  sc as ( --segment change, do not make it automatic as there might be alternative flow and steps
+    SELECT step_name,step_name_next, segment_name
+    FROM UNNEST([
+      STRUCT('702040' AS step_name,'704020' as step_name_next, 'Block Prep' AS segment_name),
+      ('704050','704060', 'Singulation/parent'),
+      ('704070','706015', 'Singulation/child'),
+      ('706025','710010','Basic Surfin'),
+      ('710030','711010','Finish'),
+      ('710030','712030','Finish')
+    ])
+   ),
    blocks_to_search as (
     select
-    id_block,bst.step_name,
+    id_block,sc.segment_name,
     max(end_time) as segment_finish_time
-    from `df-mes.mes_warehouse.block_step_tracker` bst
+    from `df-mes.mes_warehouse.block_step_tracker`
+    join sc using(step_name, step_name_next) 
     where end_time > timestamp_trunc(current_timestamp() - interval 90 day, day, 'America/Los_Angeles')
     and end_time <  timestamp_trunc(current_timestamp(), day, 'America/Los_Angeles')
     and flow_name_in = 'BE Flow'
@@ -241,12 +219,12 @@ fs AS ( -- flow segments (keep array order)
     area_name_in as area_name,
     Concat(step_name,'-',IFNULL(step_description_in, '')) as step
     from `df-mes.mes_warehouse.block_step_tracker` mh
-    JOIN blocks_to_search using(id_block, step_name)
-    join fs using(step_name)
+    JOIN blocks_to_search on (mh.id_block = blocks_to_search.id_block)
+    join fs using(step_name, segment_name)
     where end_time > current_timestamp() - interval 365 day
     and step_name_next is not null
     and cycle_time is not null
-    and mh.flow_name_in in ('BE Flow')
+    and mh.flow_name_in = 'BE Flow'
     -- and material_type_in != 'Software Test'
     -- and segment_name in ('Coring', 'TDL','Shave/Trim')
     ),
@@ -266,7 +244,7 @@ fs AS ( -- flow segments (keep array order)
     (select period, period_rank from unnest(['90d', '30d', '7d']) period with offset as period_rank),
   seg_p as 
     (select * from segments join periods on true),
-output_separated as (
+ouput_separated as (
       select distinct seg_p.*, coalesce(t.cycle_hour_median, 0.01) as cycle_hour_median
   from seg_p 
   left join 
@@ -288,7 +266,28 @@ output_separated as (
   and seg_p.period = t.time_interval
 
   )
-select * from output_separated
+  --,
+  -- weighted_output as (
+  --   select segment_name, 
+  --   case when segment_name like '%/%' then 0.5 else 1 end as segment_weight, 
+  --   segment_rank,
+  --   split(segment_name,'/')[0] as segment_belong, period, period_rank, cycle_hour_median
+  --   from ouput_separated
+  -- UNION ALL
+  --   select segment_name, 
+  --   case when segment_name like '%/%' then 0.5 else 1 end as segment_weight, 
+  --   segment_rank,
+  --   split(segment_name,'/')[1] as segment_belong, period, period_rank, cycle_hour_median
+  --   from ouput_separated
+  --   where segment_name like '%/%'
+  -- )
+select split(segment_name,'/')[0] as segment, period, period_rank,
+min(segment_rank) as segment_rank,
+sum(cycle_hour_median) as cycle_time_median
+from ouput_separated
+group by 1,2,3
+order by 1,2,3,4
+
 order by segment_rank
 
 
