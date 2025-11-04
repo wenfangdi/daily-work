@@ -1,29 +1,29 @@
 -- under new flow
 with 
     step_table as (
-  SELECT '702025' AS step_name, 'Pre Core Block QC'      AS segment, 'Block' AS unit UNION ALL
-  SELECT '702020', 'Block Core',                         'Block' UNION ALL
-  SELECT '702030', 'Edge Clean',                         'Block' UNION ALL
-  SELECT '702032', 'Post Core CharX',                    'Block' UNION ALL
-  SELECT '702035', 'Post Core Apex',                     'Block' UNION ALL
-  SELECT '702040', 'Block RIM',                          'Block' UNION ALL
+  SELECT '702040' AS step_name, 'Block Prep'      AS segment, 'Block' AS unit UNION ALL
+  -- SELECT '702020', 'Block Core',                         'Block' UNION ALL
+  -- SELECT '702030', 'Edge Clean',                         'Block' UNION ALL
+  -- SELECT '702032', 'Post Core CharX',                    'Block' UNION ALL
+  -- SELECT '702035', 'Post Core Apex',                     'Block' UNION ALL
+  -- SELECT '702040', 'Block Prep',                          'Block' UNION ALL
 
-  SELECT '704020', 'Block TDL',                          'Block' UNION ALL
-  SELECT '704035', 'Block De-RIM & Clean',               'Block' UNION ALL
-  SELECT '704040', 'Split Ingress',                      'Block' UNION ALL
-  SELECT '704050', 'Split Separate',                     'Block' UNION ALL
-  SELECT '704060', 'Split Seed Breed',                   'Plate' UNION ALL
+  -- SELECT '704020', 'Block TDL',                          'Block' UNION ALL
+  -- SELECT '704035', 'Block De-RIM & Clean',               'Block' UNION ALL
+  -- SELECT '704040', 'Split Ingress',                      'Block' UNION ALL
+  -- SELECT '704050', 'Split Separate',                     'Block' UNION ALL
+  -- SELECT '704060', 'Split Seed Breed',                   'Plate' UNION ALL
 
-  SELECT '704065', 'Post Split Plate CharX',             'Plate' UNION ALL
-  SELECT '704070', 'Post Split Plate FRT',               'Plate' UNION ALL
+  -- SELECT '704065', 'Post Split Plate CharX',             'Plate' UNION ALL
+  SELECT '704070', 'Singulation',               'Plate' UNION ALL
 
-  SELECT '706015', 'Plate Shave',                        'Plate' UNION ALL
-  SELECT '706020', 'Plate Clean',                        'Plate' UNION ALL
-  SELECT '706021', 'Plate Clean Passthrough',            'Plate' UNION ALL
+  -- SELECT '706015', 'Plate Shave',                        'Plate' UNION ALL
+  -- SELECT '706020', 'Plate Clean',                        'Plate' UNION ALL
+  SELECT '706025', 'Basic Surfin',            'Plate' UNION ALL
 
-  SELECT '710010', 'Plate Trim',                         'Plate' UNION ALL
-  SELECT '710020', 'Post Trim Plate CharX',              'Plate' UNION ALL
-  SELECT '710030', 'Post Trim Plate Apex',               'Plate'
+  -- SELECT '710010', 'Plate Trim',                         'Plate' UNION ALL
+  -- SELECT '710020', 'Post Trim Plate CharX',              'Plate' UNION ALL
+  SELECT '710030', 'Finish',               'Plate'
 
     ),
 numbered_step AS (
