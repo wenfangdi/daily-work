@@ -17,8 +17,8 @@ with
   SELECT '704065', 'Post Split Plate CharX',             'Plate' UNION ALL
   SELECT '704070', 'Post Split Plate FRT',               'Plate' UNION ALL
 
-  SELECT '710015', 'Plate Shave',                        'Plate' UNION ALL
-  SELECT '706020', 'Plate Clean (Optional)',             'Plate' UNION ALL
+  SELECT '706015', 'Plate Shave',                        'Plate' UNION ALL
+  SELECT '706020', 'Plate Clean',                        'Plate' UNION ALL
   SELECT '706021', 'Plate Clean Passthrough',            'Plate' UNION ALL
 
   SELECT '710010', 'Plate Trim',                         'Plate' UNION ALL
