@@ -173,62 +173,59 @@ WITH
 fs AS ( -- flow segments (keep array order)
     SELECT step_name, segment_name, pos
     FROM UNNEST([
-      STRUCT('701005' AS step_name, 'Block QC'        AS segment_name),
-      ('701010','Block QC'),
-      ('701025','Block QC'),
-      ('702020','Block Core'),
-      ('702030', 'Block Clean'),
-      ('702035', 'Block Measure'),
-      ('703015','RIM'),
-      ('703020','RIM'),
-      ('704020','TDL'),
-      ('704035','Block De-RIM'),
-      ('704040','Split Ingress'),
-      ('704050','Split Ingress'),
-      ('704060','Split Separate'),
-      ('704062','Split Separate'),
-      ('704070','Plate Measure'),
-      ('704105','Shave'),
-      ('704110','Trim'),
-      ('704115','Plate QC'),
-      ('708015', 'Plate QC'),
-      ('708018', 'Plate Final Clean'),
-      ('708020', 'Plate Ship')
+  STRUCT('702025' AS step_name, 'Pre Core Block QC'      AS segment_name),
+  ('702020','Block Core'),
+  ('702030','Edge Clean'),
+  ('702032','Post Core CharX'),
+  ('702035','Post Core Apex'),
+  ('702040','Block RIM'),
+
+  ('704020','Block TDL'),
+  ('704035','Block De-RIM & Clean'),
+  ('704040','Split Ingress'),
+  ('704050','Split Separate'),
+  ('704060','Split Seed Breed'),
+
+  ('704065','Post Split Plate CharX'),
+  ('704070','Post Split Plate FRT'),
+
+  ('706015','Plate Shave'),
+  ('706020','Plate Clean'),
+  ('706021','Plate Clean Passthrough'),
+
+  ('710010','Plate Trim'),
+  ('710020','Post Trim Plate CharX'),
+  ('710030','Post Trim Plate Apex')
 
     ]) WITH OFFSET AS pos
   ),
-  sc as ( --segment change, do not make it automatic as there might be alternative flow and steps
-    SELECT step_name,step_name_next, segment_name
-    FROM UNNEST([
-      STRUCT('701025' AS step_name, '702020' AS step_name_next, 'Block QC' AS segment_name),
-      ('702020','702030','Block Core'),
-      ('702030','702035','Block Clean'),
-      ('702035','703015','Block Measure'),
-      ('703020','704020','RIM'),
-      ('704020','704035','TDL'),
-      ('704035','704040','Block De-RIM'),
-      ('704050','704060','Split Ingress'),
-      ('704062','704070','Split Separate'),
-      ('704070','704105','Plate Measure'),
-      ('704105','704110','Shave'),
-      ('704110','704115','Trim'),
-      ('708015','708018','Plate QC'),
-      ('708018','708020', 'Plate Final Clean')
-    ])
-   ),
+  -- sc as ( --segment change, do not make it automatic as there might be alternative flow and steps
+  --   SELECT step_name,step_name_next, segment_name
+  --   FROM UNNEST([
+  --     STRUCT('701025' AS step_name, '702020' AS step_name_next, 'Block QC' AS segment_name),
+  --     ('702020','702030','Block Core'),
+  --     ('702030','702035','Block Clean'),
+  --     ('702035','703015','Block Measure'),
+  --     ('703020','704020','RIM'),
+  --     ('704020','704035','TDL'),
+  --     ('704035','704040','Block De-RIM'),
+  --     ('704050','704060','Split Ingress'),
+  --     ('704062','704070','Split Separate'),
+  --     ('704070','704105','Plate Measure'),
+  --     ('704105','704110','Shave'),
+  --     ('704110','704115','Trim'),
+  --     ('708015','708018','Plate QC'),
+  --     ('708018','708020', 'Plate Final Clean')
+  --   ])
+  --  ),
    blocks_to_search as (
     select
-    id_block,sc.segment_name,
+    id_block,bst.step_name,
     max(end_time) as segment_finish_time
     from `df-mes.mes_warehouse.block_step_tracker` bst
-    join sc on (
-      (sc.step_name = bst.step_name and sc.step_name_next = bst.step_name_next)
-      OR
-      (bst.step_name = '708020' and sc.step_name = bst.step_name and end_time is not null)
-      )
     where end_time > timestamp_trunc(current_timestamp() - interval 90 day, day, 'America/Los_Angeles')
     and end_time <  timestamp_trunc(current_timestamp(), day, 'America/Los_Angeles')
-    and flow_name_in = 'MPF'
+    and flow_name_in = 'BE Flow'
     group by 1,2
     ),
   record_raw as (
@@ -244,12 +241,12 @@ fs AS ( -- flow segments (keep array order)
     area_name_in as area_name,
     Concat(step_name,'-',IFNULL(step_description_in, '')) as step
     from `df-mes.mes_warehouse.block_step_tracker` mh
-    JOIN blocks_to_search on (mh.id_block = blocks_to_search.id_block)
-    join fs using(step_name, segment_name)
+    JOIN blocks_to_search using(id_block, step_name)
+    join fs using(step_name)
     where end_time > current_timestamp() - interval 365 day
     and step_name_next is not null
     and cycle_time is not null
-    and mh.flow_name_in in ('MPF', 'MPF I&D')
+    and mh.flow_name_in in ('BE Flow')
     -- and material_type_in != 'Software Test'
     -- and segment_name in ('Coring', 'TDL','Shave/Trim')
     ),
@@ -293,4 +290,5 @@ output_separated as (
   )
 select * from output_separated
 order by segment_rank
+
 
