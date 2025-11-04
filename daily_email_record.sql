@@ -286,8 +286,5 @@ min(segment_rank) as segment_rank,
 sum(cycle_hour_median) as cycle_time_median
 from ouput_separated
 group by 1,2,3
-order by 1,2,3,4
-
-order by segment_rank
-
+order by 4,3
 
