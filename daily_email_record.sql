@@ -1,33 +1,29 @@
 -- under new flow
 with 
     step_table as (
-      SELECT '702020' as step_name, 'Block Core' as segment, 'Block' as unit
-      UNION ALL
-      SELECT '702030', 'Block Clean', 'Block'
-      UNION ALL 
-      SELECT '702035', 'Block Measure', 'Block'
-      UNION ALL 
-      SELECT '703015', 'RIM', 'Block'
-      UNION ALL 
-      SELECT '704020', 'TDL', 'Block'
-      UNION ALL 
-      SELECT '704035', 'Block De-RIM', 'Block'
-      UNION ALL
-      SELECT '704050', 'Split Ingress', 'Block' -- step before breeding
-      UNION ALL 
-      SELECT '704062', 'Split Separate', 'Plate'
-      UNION ALL
-      SELECT '704070', 'Plate Measure', 'Plate'
-      UNION ALL
-      SELECT '704105', 'Shaved', 'Plate'
-      UNION ALL
-      SELECT '704110', 'Trimmed', 'Plate'
-      UNION ALL
-      SELECT '708015', 'Plate QC', 'Plate'
-      UNION ALL
-      SELECT '708018', 'Plate Final Clean','Plate'
-      UNION ALL 
-      SELECT '708020', 'Plate Ship','Plate'
+  SELECT '702025' AS step_name, 'Pre Core Block QC'      AS segment, 'Block' AS unit UNION ALL
+  SELECT '702020', 'Block Core',                         'Block' UNION ALL
+  SELECT '702030', 'Edge Clean',                         'Block' UNION ALL
+  SELECT '702032', 'Post Core CharX',                    'Block' UNION ALL
+  SELECT '702035', 'Post Core Apex',                     'Block' UNION ALL
+  SELECT '702040', 'Block RIM',                          'Block' UNION ALL
+
+  SELECT '704020', 'Block TDL',                          'Block' UNION ALL
+  SELECT '704035', 'Block De-RIM & Clean',               'Block' UNION ALL
+  SELECT '704040', 'Split Ingress',                      'Block' UNION ALL
+  SELECT '704050', 'Split Separate',                     'Block' UNION ALL
+  SELECT '704060', 'Split Seed Breed',                   'Plate' UNION ALL
+
+  SELECT '704065', 'Post Split Plate CharX',             'Plate' UNION ALL
+  SELECT '704070', 'Post Split Plate FRT',               'Plate' UNION ALL
+
+  SELECT '710015', 'Plate Shave',                        'Plate' UNION ALL
+  SELECT '706020', 'Plate Clean (Optional)',             'Plate' UNION ALL
+  SELECT '706021', 'Plate Clean Passthrough',            'Plate' UNION ALL
+
+  SELECT '710010', 'Plate Trim',                         'Plate' UNION ALL
+  SELECT '710020', 'Post Trim Plate CharX',              'Plate' UNION ALL
+  SELECT '710030', 'Post Trim Plate Apex',               'Plate'
 
     ),
 numbered_step AS (
@@ -35,7 +31,7 @@ numbered_step AS (
     step_name,
     segment,
     unit,
-    ROW_NUMBER() OVER (ORDER BY step_name) + 2 AS step_order -- start from 3
+    ROW_NUMBER() OVER (ORDER BY step_name) + 1 AS step_order -- start from 2
   FROM step_table
 ),
 throughput_raw as 
@@ -54,11 +50,10 @@ throughput_raw as
     left join numbered_step on mh.step_name = numbered_step.step_name
     left join df-max.raw_dfdb.block_dimensions bd
     on mh.id_block = bd.id_block
-    where mh.flow_name_in in ('MPF I&D','MPF')
+    where mh.flow_name_in in ('BE Flow')
     and mh.end_time BETWEEN timestamp_trunc(current_timestamp() - interval 14+1 day,DAY, "America/Los_Angeles") AND timestamp_trunc(current_timestamp(),DAY, "America/Los_Angeles")
-    and ( (mh.step_name_next = '702020') or  -- add incoming block step here
+    and 
           (mh.step_name in (select step_name from step_table))
-        )
        -- and mh.material_type_in != 'Software Test'
     and end_time is not null
     ),
@@ -73,8 +68,6 @@ throughput as (
     ),
 segments as 
     (select segment,step_order from numbered_step
-    UNION ALL
-    select 'Block QC' as segment,2 as step_order -- add incoming block step order here
     ),
     periods as 
     (select period from unnest(['14d', '5d', '1d']) period),
