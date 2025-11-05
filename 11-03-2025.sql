@@ -39,14 +39,10 @@ and vbit.tray_name not like '%PS%'
 
 select theoretical_label,
 case when end_time < '2024-09-30' then 'Before ECN'
-else NULL end
-as time_category,
-case when hour_til_end < 4 then 'close to end'
-else NULL end as time_of_occurance,
-case when final_clean_vol_cm3 is null then 'missed post hep step'
-else NULL end as post_hep_check,
-case when loading_purpose != 'Production' then 'Not Production' else null end as purpose,
-case when custom_workflow is not null then 'Flagged but missed' else null end as mistake,
+   when hour_til_end < 4 then 'close to end'
+   when final_clean_vol_cm3 is null then 'No Charx'
+   when loading_purpose != 'Production' then 'Not Production' 
+   when custom_workflow is not null then 'Flagged but missed' else null end as mistake,
  count(*) from raw
-group by 1,2,3,4,5,6
-order by 1,2,3,4,5,6
+group by 1,2
+order by 1,2
