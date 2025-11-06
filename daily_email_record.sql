@@ -39,6 +39,7 @@ throughput_raw as
     and 
           (mh.step_name in (select step_name from step_table))
        -- and mh.material_type_in != 'Software Test'
+    and mh.id_block not in (1414294,1414293,1497866,1835970,1835971,1546036,1414292,1643538)
     and end_time is not null
     ),
 throughput as (
@@ -199,11 +200,12 @@ fs AS ( -- flow segments (keep array order)
     select
     id_block,sc.segment_name,
     max(end_time) as segment_finish_time
-    from `df-mes.mes_warehouse.block_step_tracker`
+    from `df-mes.mes_warehouse.block_step_tracker` mh
     join sc using(step_name, step_name_next) 
     where end_time > timestamp_trunc(current_timestamp() - interval 90 day, day, 'America/Los_Angeles')
     and end_time <  timestamp_trunc(current_timestamp(), day, 'America/Los_Angeles')
     and flow_name_in = 'BE Flow'
+    and mh.id_block not in (1414294,1414293,1497866,1835970,1835971,1546036,1414292,1643538)
     group by 1,2
     ),
   record_raw as (
