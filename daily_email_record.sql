@@ -7,7 +7,7 @@ with
 
   SELECT '706025', 'Basic Surfin',            'Plate' UNION ALL
 
-  SELECT '710030', 'Finish',               'Plate'
+  SELECT '710035', 'Finish',               'Plate'
 
     ),
 numbered_step AS (
