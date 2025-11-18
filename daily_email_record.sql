@@ -181,7 +181,8 @@ fs AS ( -- flow segments (keep array order)
 
   ('710010','Finish'),
   ('710020','Finish'),
-  ('710030','Finish')
+  ('710030','Finish'),
+  ('710035','Finish')
 
     ]) WITH OFFSET AS pos
   ),
@@ -192,8 +193,8 @@ fs AS ( -- flow segments (keep array order)
       ('704050','704060', 'Singulation/parent'),
       ('704070','706015', 'Singulation/child'),
       ('706025','710010','Basic Surfin'),
-      ('710030','711010','Finish'),
-      ('710030','712030','Finish')
+      ('710035','711010','Finish'),
+      ('710035','712030','Finish')
     ])
    ),
    blocks_to_search as (
