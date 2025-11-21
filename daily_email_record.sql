@@ -236,58 +236,51 @@ fs AS ( -- flow segments (keep array order)
     from record_raw
     group by 1, 2, 3
     ),
+converted_cycle_time_per_block as (
+select id_block, split(segment_name,'/')[0] as segment_name, max(segment_finish_time) as segment_finish_time, sum(cycle_hour) as cycle_hour from 
+  (
+      select b.id_block as id_block, cycle_time_per_block.segment_name, cycle_time_per_block.segment_finish_time, cycle_time_per_block.cycle_hour
+      from cycle_time_per_block
+      join `df-max.raw_dfdb.blocks` b on cycle_time_per_block.id_block = b.parent_id_block
+
+      UNION ALL
+      select * from cycle_time_per_block
+      where segment_name != 'Singulation/parent'
+  )
+group by 1,2
+),
   segments AS ( -- distinct segments + rank by first appearance
     SELECT
-      segment_name,
+      split(segment_name,'/')[0] as segment_name,
       DENSE_RANK() OVER (ORDER BY MIN(pos)) AS segment_rank
     FROM fs
-    GROUP BY segment_name
+    GROUP BY 1
   ),
   periods as 
     (select period, period_rank from unnest(['90d', '30d', '7d']) period with offset as period_rank),
   seg_p as 
-    (select * from segments join periods on true),
-ouput_separated as (
-      select distinct seg_p.*, coalesce(t.cycle_hour_median, 0.01) as cycle_hour_median
+    (select * from segments join periods on true)
+
+
+  select distinct seg_p.*, coalesce(t.cycle_hour_median, 0.01) as cycle_hour_median,coalesce(t.cycle_hour_max, 0.01) as cycle_hour_max
   from seg_p 
   left join 
-  (select segment_name, '90d' as time_interval, -- count(child_plate) as child_count_with_data, avg(cycle_hour) as cycle_hour 
-  PERCENTILE_CONT(cycle_hour, 0.5) over (partition by segment_name) as cycle_hour_median,
-  from cycle_time_per_block
-  where segment_finish_time > timestamp_trunc(current_timestamp() - interval 90 day, day, 'America/Los_Angeles')
-  UNION ALL
-  select segment_name, '30d' as time_interval, -- count(child_plate) as child_count_with_data, avg(cycle_hour) as cycle_hour 
-  PERCENTILE_CONT(cycle_hour, 0.5) over (partition by segment_name) as cycle_hour_median,
-  from cycle_time_per_block
-  where segment_finish_time > timestamp_trunc(current_timestamp() - interval 30 day, day, 'America/Los_Angeles')
-  UNION ALL
-  select segment_name, '7d' as time_interval, -- count(child_plate) as child_count_with_data, avg(cycle_hour) as cycle_hour 
-  PERCENTILE_CONT(cycle_hour, 0.5) over (partition by segment_name) as cycle_hour_median,
-  from cycle_time_per_block
-  where segment_finish_time > timestamp_trunc(current_timestamp() - interval 7 day, day, 'America/Los_Angeles')) t
+  (
+      select segment_name, '90d' as time_interval, -- count(child_plate) as child_count_with_data, avg(cycle_hour) as cycle_hour 
+      PERCENTILE_CONT(cycle_hour, 0.5) over (partition by segment_name) as cycle_hour_median,MAX(cycle_hour) OVER (PARTITION BY segment_name)   cycle_hour_max
+      from converted_cycle_time_per_block
+      where segment_finish_time > timestamp_trunc(current_timestamp() - interval 90 day, day, 'America/Los_Angeles')
+    UNION ALL
+      select segment_name, '30d' as time_interval, -- count(child_plate) as child_count_with_data, avg(cycle_hour) as cycle_hour 
+      PERCENTILE_CONT(cycle_hour, 0.5) over (partition by segment_name) as cycle_hour_median,MAX(cycle_hour) OVER (PARTITION BY segment_name)  cycle_hour_max
+      from converted_cycle_time_per_block
+      where segment_finish_time > timestamp_trunc(current_timestamp() - interval 30 day, day, 'America/Los_Angeles')
+    UNION ALL
+      select segment_name, '7d' as time_interval, -- count(child_plate) as child_count_with_data, avg(cycle_hour) as cycle_hour 
+      PERCENTILE_CONT(cycle_hour, 0.5) over (partition by segment_name) as cycle_hour_median,MAX(cycle_hour) OVER (PARTITION BY segment_name)  cycle_hour_max
+      from converted_cycle_time_per_block
+      where segment_finish_time > timestamp_trunc(current_timestamp() - interval 7 day, day, 'America/Los_Angeles')
+  ) t
   on seg_p.segment_name = t.segment_name
   and seg_p.period = t.time_interval
-
-  )
-  --,
-  -- weighted_output as (
-  --   select segment_name, 
-  --   case when segment_name like '%/%' then 0.5 else 1 end as segment_weight, 
-  --   segment_rank,
-  --   split(segment_name,'/')[0] as segment_belong, period, period_rank, cycle_hour_median
-  --   from ouput_separated
-  -- UNION ALL
-  --   select segment_name, 
-  --   case when segment_name like '%/%' then 0.5 else 1 end as segment_weight, 
-  --   segment_rank,
-  --   split(segment_name,'/')[1] as segment_belong, period, period_rank, cycle_hour_median
-  --   from ouput_separated
-  --   where segment_name like '%/%'
-  -- )
-select split(segment_name,'/')[0] as segment, period, period_rank,
-min(segment_rank) as segment_rank,
-sum(cycle_hour_median) as cycle_time_median
-from ouput_separated
-group by 1,2,3
-order by 4,3
-
+order by 4,2
