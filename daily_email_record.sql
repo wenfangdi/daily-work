@@ -1,24 +1,25 @@
 -- under new flow
 with 
-    step_table as (
-  SELECT '702038' AS step_name, 'Block Prep'      AS segment, 'Block' AS unit UNION ALL
-
-  SELECT '702040', 'RIM',          'Block' UNION ALL
-
-  SELECT '704070', 'Singulation',  'Plate' UNION ALL
-
-  SELECT '706025', 'Basic Surfin', 'Plate' UNION ALL
-
-  SELECT '710035', 'Finish',       'Plate'
-
-    ),
+  sc as ( --segment change, do not make it automatic as there might be alternative flow and steps
+    SELECT step_name,step_name_next, segment_name, unit
+    FROM UNNEST([
+      STRUCT('702038' AS step_name,'702040' as step_name_next, 'Block Prep' AS segment_name, 'Block' AS unit ),
+      ('702040','704020', 'RIM','Block'),
+      ('704050','704060', 'Singulation/parent','Plate'),
+      ('704070','706015', 'Singulation/child','Plate'),
+      ('706025','710010','Basic Surfin','Plate'),
+      ('710035','711010','Finish','Plate'),
+      ('710035','712030','Finish','Plate')
+    ])
+   ),
 numbered_step AS (
   SELECT
     step_name,
-    segment,
+    step_name_next,
+    segment_name,
     unit,
     ROW_NUMBER() OVER (ORDER BY step_name) + 1 AS step_order -- start from 2
-  FROM step_table
+  FROM sc
 ),
 throughput_raw as 
     (select   
@@ -26,20 +27,18 @@ throughput_raw as
     numbered_step.unit,
     end_time,
     timestamp_trunc(DATETIME(TIMESTAMP(end_time), "America/Los_Angeles"), DAY) as end_date_PST, 
-    IFNULL(numbered_step.segment, 'Block QC') as segment,
+    numbered_step.segment_name,
     flow_name_in as flow_name,
     1 as out,
     bd.thickness,
     mh.id_block
     from
         `df-mes.mes_warehouse.block_step_tracker` mh
-    left join numbered_step on mh.step_name = numbered_step.step_name
+    join numbered_step using(step_name, step_name_next)
     left join df-max.raw_dfdb.block_dimensions bd
     on mh.id_block = bd.id_block
     where mh.flow_name_in in ('BE Flow')
     and mh.end_time BETWEEN timestamp_trunc(current_timestamp() - interval 14+1 day,DAY, "America/Los_Angeles") AND timestamp_trunc(current_timestamp(),DAY, "America/Los_Angeles")
-    and 
-          (mh.step_name in (select step_name from step_table))
        -- and mh.material_type_in != 'Software Test'
     and mh.id_block not in (1414294,1414293,1497866,1835970,1835971,1546036,1414292,1643538)
     and end_time is not null
@@ -54,14 +53,14 @@ throughput as (
       where end_time BETWEEN timestamp_trunc(current_timestamp() - interval 14+1 day,DAY, "America/Los_Angeles") AND current_timestamp()
     ),
 segments as 
-    (select segment,step_order from numbered_step
+    (select segment_name,step_order from numbered_step
     ),
     periods as 
     (select period from unnest(['14d', '5d', '1d']) period),
     master_products as 
     (select master_product from unnest([ '1x1','2x2','D200']) master_product),
     seg_col as (
-    select segment,step_order, period, master_product
+    select segment_name,step_order, period, master_product
     from segments
     join periods
     on true
@@ -81,32 +80,32 @@ grown as (
       and r.seed_size_type != 'Others'
     ),    
 seg_col_product_output as (
-    select seg_col.segment,step_order, seg_col.period as col, seg_col.master_product,
+    select seg_col.segment_name,step_order, seg_col.period as col, seg_col.master_product,
     d.output as output
     from seg_col
     left join 
     (
-      select segment, '14d' as period, master_product, sum(plate_count) / 14 as output 
+      select segment_name, '14d' as period, master_product, sum(plate_count) / 14 as output 
       from throughput
-      group by segment, master_product
+      group by segment_name, master_product
   UNION ALL
-      select segment, '5d' as period, master_product, sum(plate_count) / 5 as output 
+      select segment_name, '5d' as period, master_product, sum(plate_count) / 5 as output 
       from throughput
       where end_date_PST BETWEEN timestamp_trunc(datetime(current_timestamp() - interval 5+1 day, "America/Los_Angeles"), DAY) AND current_datetime()
-      group by segment, master_product
+      group by segment_name, master_product
   UNION ALL
-      select segment, '1d' as period, master_product, sum(plate_count) /1 as output 
+      select segment_name, '1d' as period, master_product, sum(plate_count) /1 as output 
       from throughput
       where end_date_PST BETWEEN timestamp_trunc(datetime(current_timestamp() - interval 1 day, "America/Los_Angeles"), DAY) AND current_datetime()
-      group by segment, master_product
+      group by segment_name, master_product
     ) d 
-    on d.segment = seg_col.segment 
+    on d.segment_name = seg_col.segment_name 
     and d.master_product = seg_col.master_product 
     and d.period = seg_col.period
 
     UNION ALL
 
-    select 'Grown' as segment,1 as step_order, periods.period, master_product, output
+    select 'Grown' as segment_name,1 as step_order, periods.period, master_product, output
     from periods 
     join master_products
     on true
@@ -140,7 +139,7 @@ seg_col_product_output as (
     and master_products.master_product = yield.seed_type    
     )
 select 
-segment, 
+segment_name, 
 step_order,
 col as period,
 coalesce(sum(
