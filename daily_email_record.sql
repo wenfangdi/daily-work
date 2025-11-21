@@ -262,22 +262,22 @@ group by 1,2
     (select * from segments join periods on true)
 
 
-  select distinct seg_p.*, coalesce(t.cycle_hour_median, 0.01) as cycle_hour_median,coalesce(t.cycle_hour_max, 0.01) as cycle_hour_max
+  select distinct seg_p.*, coalesce(t.cycle_hour_avg, 0.01) as cycle_hour_avg,coalesce(t.cycle_hour_max, 0.01) as cycle_hour_max
   from seg_p 
   left join 
   (
       select segment_name, '90d' as time_interval, -- count(child_plate) as child_count_with_data, avg(cycle_hour) as cycle_hour 
-      AVG(cycle_hour) over (partition by segment_name) as cycle_hour_median,MAX(cycle_hour) OVER (PARTITION BY segment_name)   cycle_hour_max
+      AVG(cycle_hour) over (partition by segment_name) as cycle_hour_avg,MAX(cycle_hour) OVER (PARTITION BY segment_name)   cycle_hour_max
       from converted_cycle_time_per_block
       where segment_finish_time > timestamp_trunc(current_timestamp() - interval 90 day, day, 'America/Los_Angeles')
     UNION ALL
       select segment_name, '30d' as time_interval, -- count(child_plate) as child_count_with_data, avg(cycle_hour) as cycle_hour 
-      AVG(cycle_hour) over (partition by segment_name) as cycle_hour_median,MAX(cycle_hour) OVER (PARTITION BY segment_name)  cycle_hour_max
+      AVG(cycle_hour) over (partition by segment_name) as cycle_hour_avg,MAX(cycle_hour) OVER (PARTITION BY segment_name)  cycle_hour_max
       from converted_cycle_time_per_block
       where segment_finish_time > timestamp_trunc(current_timestamp() - interval 30 day, day, 'America/Los_Angeles')
     UNION ALL
       select segment_name, '7d' as time_interval, -- count(child_plate) as child_count_with_data, avg(cycle_hour) as cycle_hour 
-      AVG(cycle_hour) over (partition by segment_name) as cycle_hour_median,MAX(cycle_hour) OVER (PARTITION BY segment_name)  cycle_hour_max
+      AVG(cycle_hour) over (partition by segment_name) as cycle_hour_avg,MAX(cycle_hour) OVER (PARTITION BY segment_name)  cycle_hour_max
       from converted_cycle_time_per_block
       where segment_finish_time > timestamp_trunc(current_timestamp() - interval 7 day, day, 'America/Los_Angeles')
   ) t
