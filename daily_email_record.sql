@@ -155,6 +155,7 @@ group by 1, 2, 3, 5
 order by 2, 3, 5;
 -- for cycle time---------------------------------------------------------------------------------------------------------------------------------------
 
+
 WITH
 fs AS ( -- flow segments (keep array order)
     SELECT step_name, segment_name, pos
@@ -187,16 +188,16 @@ fs AS ( -- flow segments (keep array order)
 
     ]) WITH OFFSET AS pos
   ),
-  sc as ( --segment change, do not make it automatic as there might be alternative flow and steps
-    SELECT step_name,step_name_next, segment_name
+sc as ( --segment change, do not make it automatic as there might be alternative flow and steps
+    SELECT step_name,step_name_next, segment_name, unit
     FROM UNNEST([
-      STRUCT('702038' AS step_name,'702040' as step_name_next, 'Block Prep' AS segment_name),
-      ('702040','704020', 'RIM'),
-      ('704050','704060', 'Singulation/parent'),
-      ('704070','706015', 'Singulation/child'),
-      ('706025','710010','Basic Surfin'),
-      ('710035','711010','Finish'),
-      ('710035','712030','Finish')
+      STRUCT('702038' AS step_name,'702040' as step_name_next, 'Block Prep' AS segment_name, 'Block' AS unit ),
+      ('702040','704020', 'RIM','Block'),
+      ('704050','704060', 'Singulation/parent','Plate'),
+      ('704070','706015', 'Singulation/child','Plate'),
+      ('706025','710010','Basic Surfin','Plate'),
+      ('710035','711010','Finish','Plate'),
+      ('710035','712030','Finish','Plate')
     ])
    ),
    blocks_to_search as (
