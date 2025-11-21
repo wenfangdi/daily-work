@@ -1,13 +1,15 @@
 -- under new flow
 with 
     step_table as (
-  SELECT '702040' AS step_name, 'Block Prep'      AS segment, 'Block' AS unit UNION ALL
+  SELECT '702038' AS step_name, 'Block Prep'      AS segment, 'Block' AS unit UNION ALL
 
-  SELECT '704070', 'Singulation',               'Plate' UNION ALL
+  SELECT '702040', 'RIM',          'Block' UNION ALL
 
-  SELECT '706025', 'Basic Surfin',            'Plate' UNION ALL
+  SELECT '704070', 'Singulation',  'Plate' UNION ALL
 
-  SELECT '710035', 'Finish',               'Plate'
+  SELECT '706025', 'Basic Surfin', 'Plate' UNION ALL
+
+  SELECT '710035', 'Finish',       'Plate'
 
     ),
 numbered_step AS (
