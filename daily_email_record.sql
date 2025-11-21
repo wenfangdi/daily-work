@@ -166,7 +166,7 @@ fs AS ( -- flow segments (keep array order)
   ('702033','Block Prep'),
   ('702035','Block Prep'),
   ('702038','Block Prep'),
-  ('702040','Block Prep'),
+  ('702040','RIM'),
 
   ('704020','Singulation/parent'),
   ('704035','Singulation/parent'),
@@ -191,7 +191,8 @@ fs AS ( -- flow segments (keep array order)
   sc as ( --segment change, do not make it automatic as there might be alternative flow and steps
     SELECT step_name,step_name_next, segment_name
     FROM UNNEST([
-      STRUCT('702040' AS step_name,'704020' as step_name_next, 'Block Prep' AS segment_name),
+      STRUCT('702038' AS step_name,'702040' as step_name_next, 'Block Prep' AS segment_name),
+      ('702040','704020', 'RIM'),
       ('704050','704060', 'Singulation/parent'),
       ('704070','706015', 'Singulation/child'),
       ('706025','710010','Basic Surfin'),
@@ -264,22 +265,22 @@ group by 1,2
     (select * from segments join periods on true)
 
 
-  select distinct seg_p.*, coalesce(t.cycle_hour_avg, 0.01) as cycle_hour_avg,coalesce(t.cycle_hour_max, 0.01) as cycle_hour_max
+  select distinct seg_p.*, coalesce(t.cycle_hour_avg, 0.01) as cycle_hour_avg,coalesce(t.cycle_hour_max, 0.01) as cycle_hour_max, t.number_of_blocks
   from seg_p 
   left join 
   (
       select segment_name, '90d' as time_interval, -- count(child_plate) as child_count_with_data, avg(cycle_hour) as cycle_hour 
-      AVG(cycle_hour) over (partition by segment_name) as cycle_hour_avg,MAX(cycle_hour) OVER (PARTITION BY segment_name)   cycle_hour_max
+      AVG(cycle_hour) over (partition by segment_name) as cycle_hour_avg,MAX(cycle_hour) OVER (PARTITION BY segment_name)   cycle_hour_max, count(id_block) OVER (PARTITION BY segment_name)  as number_of_blocks
       from converted_cycle_time_per_block
       where segment_finish_time > timestamp_trunc(current_timestamp() - interval 90 day, day, 'America/Los_Angeles')
     UNION ALL
       select segment_name, '30d' as time_interval, -- count(child_plate) as child_count_with_data, avg(cycle_hour) as cycle_hour 
-      AVG(cycle_hour) over (partition by segment_name) as cycle_hour_avg,MAX(cycle_hour) OVER (PARTITION BY segment_name)  cycle_hour_max
+      AVG(cycle_hour) over (partition by segment_name) as cycle_hour_avg,MAX(cycle_hour) OVER (PARTITION BY segment_name)  cycle_hour_max, count(id_block) OVER (PARTITION BY segment_name)  as number_of_blocks
       from converted_cycle_time_per_block
       where segment_finish_time > timestamp_trunc(current_timestamp() - interval 30 day, day, 'America/Los_Angeles')
     UNION ALL
       select segment_name, '7d' as time_interval, -- count(child_plate) as child_count_with_data, avg(cycle_hour) as cycle_hour 
-      AVG(cycle_hour) over (partition by segment_name) as cycle_hour_avg,MAX(cycle_hour) OVER (PARTITION BY segment_name)  cycle_hour_max
+      AVG(cycle_hour) over (partition by segment_name) as cycle_hour_avg,MAX(cycle_hour) OVER (PARTITION BY segment_name)  cycle_hour_max, count(id_block) OVER (PARTITION BY segment_name)  as number_of_blocks
       from converted_cycle_time_per_block
       where segment_finish_time > timestamp_trunc(current_timestamp() - interval 7 day, day, 'America/Los_Angeles')
   ) t
