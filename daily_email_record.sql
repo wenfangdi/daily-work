@@ -38,7 +38,7 @@ throughput_raw as
     on mh.id_block = bd.id_block
     where mh.flow_name_in in ('BE Flow')
     and mh.end_time BETWEEN timestamp_trunc(current_timestamp() - interval 14+1 day,DAY, "America/Los_Angeles") AND timestamp_trunc(current_timestamp(),DAY, "America/Los_Angeles")
-       -- and mh.material_type_in != 'Software Test'
+       and mh.material_type_in != 'Software Test'
     and mh.id_block not in (1414294,1414293,1497866,1835970,1835971,1546036,1414292,1643538)
     and end_time is not null
     ),
@@ -238,8 +238,7 @@ sc as ( --segment change, do not make it automatic as there might be alternative
     and step_name_next is not null
     and cycle_time is not null
     and mh.flow_name_in = 'BE Flow'
-    -- and material_type_in != 'Software Test'
-    -- and segment_name in ('Coring', 'TDL','Shave/Trim')
+    and material_type_in != 'Software Test'
     ),
     cycle_time_per_block as (
     select id_block, segment_name, segment_finish_time, sum(cycle_hour) as cycle_hour, 
