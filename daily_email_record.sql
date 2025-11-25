@@ -4,8 +4,8 @@ with
     FROM UNNEST([
       STRUCT('702038' AS step_name,'702040' as step_name_next, 'Block Prep' AS segment_name, 'Block' AS unit ),
       ('702040','704020', 'RIM','Block'),
-      ('704050','704060', 'Singulation/parent','Block'),
-      ('704070','706015', 'Singulation/child','Plate'),
+      ('704050','704060', 'Singulation|parent','Block'),
+      ('704070','706015', 'Singulation|child','Plate'),
       ('706025','710010','Basic Surfin','Plate'),
       ('710035','711010','Finish','Plate'),
       ('710035','712030','Finish','Plate')
@@ -101,8 +101,14 @@ seg_col_product_output as (
     on d.segment_name = seg_col.segment_name 
     and d.master_product = seg_col.master_product 
     and d.period = seg_col.period
+      -- Stock /30
+  UNION ALL
+      select 'Stock/30',9 as step_order, '5d' as period,
+      '1x1' as master_product,
+      sum(plate_count)/30 as output
+      from `df-mes.mes_warehouse.WIP_Cache_plate`
 
-    UNION ALL
+  UNION ALL
 
     select 'Grown' as segment_name,1 as step_order, periods.period, master_product, output
     from periods 
@@ -138,7 +144,7 @@ seg_col_product_output as (
     and master_products.master_product = yield.seed_type    
     )
 select 
-split(segment_name, '/')[0] as segment, 
+split(segment_name, '|')[0] as segment, 
 step_order,
 col as period,
 coalesce(sum(
@@ -148,8 +154,9 @@ coalesce(sum(
     else output end), 0.01) as yield,
 master_product,
 from seg_col_product_output
-where segment_name != 'Singulation/parent'
--- where col = '14d'
+where 1=1
+and segment_name != 'Singulation|parent'
+-- and col = '5d'
 -- and master_product = '1x1'
 group by 1, 2, 3, 5
 order by 2, 3, 5;
@@ -168,14 +175,14 @@ fs AS ( -- flow segments (keep array order)
   ('702038','Block Prep'),
   ('702040','RIM'),
 
-  ('704020','Singulation/parent'),
-  ('704035','Singulation/parent'),
-  ('704040','Singulation/parent'),
-  ('704050','Singulation/parent'),
+  ('704020','Singulation|parent'),
+  ('704035','Singulation|parent'),
+  ('704040','Singulation|parent'),
+  ('704050','Singulation|parent'),
 
-  ('704060','Singulation/child'),
-  ('704066','Singulation/child'),
-  ('704070','Singulation/child'),
+  ('704060','Singulation|child'),
+  ('704066','Singulation|child'),
+  ('704070','Singulation|child'),
 
   ('706015','Basic Surfin'),
   ('706020','Basic Surfin'),
@@ -193,8 +200,8 @@ sc as ( --segment change, do not make it automatic as there might be alternative
     FROM UNNEST([
       STRUCT('702038' AS step_name,'702040' as step_name_next, 'Block Prep' AS segment_name, 'Block' AS unit ),
       ('702040','704020', 'RIM','Block'),
-      ('704050','704060', 'Singulation/parent','Plate'),
-      ('704070','706015', 'Singulation/child','Plate'),
+      ('704050','704060', 'Singulation|parent','Plate'),
+      ('704070','706015', 'Singulation|child','Plate'),
       ('706025','710010','Basic Surfin','Plate'),
       ('710035','711010','Finish','Plate'),
       ('710035','712030','Finish','Plate')
@@ -240,7 +247,7 @@ sc as ( --segment change, do not make it automatic as there might be alternative
     group by 1, 2, 3
     ),
 converted_cycle_time_per_block as (
-select id_block, split(segment_name,'/')[0] as segment_name, max(segment_finish_time) as segment_finish_time, sum(cycle_hour) as cycle_hour from 
+select id_block, split(segment_name,'|')[0] as segment_name, max(segment_finish_time) as segment_finish_time, sum(cycle_hour) as cycle_hour from 
   (
       select b.id_block as id_block, cycle_time_per_block.segment_name, cycle_time_per_block.segment_finish_time, cycle_time_per_block.cycle_hour
       from cycle_time_per_block
@@ -248,13 +255,13 @@ select id_block, split(segment_name,'/')[0] as segment_name, max(segment_finish_
 
       UNION ALL
       select * from cycle_time_per_block
-      where segment_name != 'Singulation/parent'
+      where segment_name != 'Singulation|parent'
   )
 group by 1,2
 ),
   segments AS ( -- distinct segments + rank by first appearance
     SELECT
-      split(segment_name,'/')[0] as segment_name,
+      split(segment_name,'|')[0] as segment_name,
       DENSE_RANK() OVER (ORDER BY MIN(pos)) AS segment_rank
     FROM fs
     GROUP BY 1
