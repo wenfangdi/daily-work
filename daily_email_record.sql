@@ -72,6 +72,7 @@ throughput as (
     ),
 segments as 
     (select segment_name,step_order from numbered_step
+    group by 1,2
     ),
     periods as 
     (select period from unnest(['14d', '5d', '1d']) period),
@@ -177,8 +178,8 @@ master_product,
 from seg_col_product_output
 where 1=1
 and segment_name != 'Singulation|parent'
--- and col = '5d'
--- and master_product = '1x1'
+and col = '5d'
+and master_product = '1x1'
 group by 1, 2, 3, 5
 order by 2, 3, 5;
 -- for cycle time---------------------------------------------------------------------------------------------------------------------------------------
