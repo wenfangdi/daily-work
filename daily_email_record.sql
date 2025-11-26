@@ -17,7 +17,7 @@ numbered_step AS (
     step_name_next,
     segment_name,
     unit,
-    ROW_NUMBER() OVER (ORDER BY step_name) + 1 AS step_order -- start from 2
+    DENSE_RANK() OVER (ORDER BY step_name) + 1 AS step_order -- start from 2
   FROM sc
 ),
 throughput_raw as 
@@ -27,7 +27,6 @@ throughput_raw as
     end_time,
     timestamp_trunc(DATETIME(TIMESTAMP(end_time), "America/Los_Angeles"), DAY) as end_date_PST, 
     numbered_step.segment_name,
-    flow_name_in as flow_name,
     1 as out,
     bd.thickness,
     mh.id_block
@@ -39,8 +38,28 @@ throughput_raw as
     where mh.flow_name_in in ('BE Flow')
     and mh.end_time BETWEEN timestamp_trunc(current_timestamp() - interval 14+1 day,DAY, "America/Los_Angeles") AND timestamp_trunc(current_timestamp(),DAY, "America/Los_Angeles")
        and mh.material_type_in != 'Software Test'
+       and numbered_step.segment_name != 'Finish'
+ 
     and mh.id_block not in (1414294,1414293,1497866,1835970,1835971,1546036,1414292,1643538)
     and end_time is not null
+
+  -- add the PIM info
+
+  UNION ALL
+    SELECT
+    '1x1' as master_product,
+    'Plate' as unit,
+    fps.timestamp end_time,
+    timestamp_trunc(DATETIME(TIMESTAMP(fps.timestamp), "America/Los_Angeles"), DAY) as end_date_PST, 
+    'Finish' segment_name,
+    1 as out,
+    bd.thickness,
+    fp.id_block
+    FROM `df-max.raw_dfdb.final_plates` fp
+    JOIN `df-max.raw_dfdb.final_plate_shipments` fps USING (id_final_plate_shipment)
+    JOIN df-max.raw_dfdb.block_dimensions bd USING(id_block)
+    WHERE fps.timestamp BETWEEN timestamp_trunc(current_timestamp() - interval 14+1 day,DAY, "America/Los_Angeles") AND timestamp_trunc(current_timestamp(),DAY, "America/Los_Angeles")
+    AND size_family = "1x1"
     ),
 throughput as (
       select *,
@@ -97,13 +116,15 @@ seg_col_product_output as (
       from throughput
       where end_date_PST BETWEEN timestamp_trunc(datetime(current_timestamp() - interval 1 day, "America/Los_Angeles"), DAY) AND current_datetime()
       group by segment_name, master_product
+
+
     ) d 
     on d.segment_name = seg_col.segment_name 
     and d.master_product = seg_col.master_product 
     and d.period = seg_col.period
       -- Stock /30
   UNION ALL
-      select 'Stock/30',9 as step_order, '5d' as period,
+      select 'Stock/30',8 as step_order, '5d' as period,
       '1x1' as master_product,
       sum(plate_count)/30 as output
       from `df-mes.mes_warehouse.WIP_Cache_plate`
