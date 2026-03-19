@@ -1,8 +1,5 @@
 from plotly.subplots import make_subplots
 def TDL_yield_chart():
-     ###############################
-    ### Create Seed Inventory Chart
-    ###############################
     if os.path.exists('df-data-and-ai.json'):
         sm_credentials = service_account.Credentials.from_service_account_file('df-data-and-ai.json')
     else:
@@ -21,7 +18,7 @@ def TDL_yield_chart():
     query_client = bigquery.Client(credentials=credentials)
 
     ###########################
-    ### TDL Yield Chart ###
+    ### TDL Post Split thickness distribution ###
     ###########################
     
     query_tdl_thickness_per_block = ''' 
@@ -32,34 +29,26 @@ with first_char as (select sample_id, min(data_collection_complete_date) as data
         and data_collection_complete_date > current_timestamp() - interval 90 day
         group by 1
         ),
+last_laser as (
+  SELECT id_block, recipe_target
+  FROM `df-data-and-ai.trilliant_warehouse.TDL_laser_recipe`
+  QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY id_block
+    ORDER BY timestamp DESC
+  ) = 1
+),
     raw as (
         select blocks.parent_id_block,dc.sample_id as id_block,nsl.data as layer, first_char.data_collection_complete_date,manufacturer_lot_number as batch,product_name,
-        -- least(pbd.width, pbd.length) as parent_size,
-        -- case when least(pbd.width, pbd.length) > 25 then 'large' else 'small' end as size_group,
-        coalesce(
-          safe_cast(substr(tgt.recipe_target,1,3) as float64),
-          case when least(pbd.width, pbd.length) > 25 then 450 else 315 end) as target_thick,
+          safe_cast(substr(tgt.recipe_target,1,3) as float64)  as target_thick,
         max(substr(tgt.recipe_target,1,3)) as recipe_target,
-        --  DENSE_RANK() OVER (
-        --   ORDER BY 
-        --   case when least(pbd.width, pbd.length) > 25 then 'large' else 'small' end,
-        --   parent_id_block
-        --   ) as parent_rank,
         max(dc.flow_name) as flow,
-        max(if(parameter_name = 'ttv_new', collected_value, NULL)) as ttv,
         max(if(parameter_name = 'min_thickness_despike_filtered', safe_cast(collected_value as float64), NULL)) as minThick_raw,
-        max(if(parameter_name = 'max_thickness_despike_filtered', safe_cast(collected_value as float64), NULL)) as maxThick_raw,
-        max(if(parameter_name = 'z_range_top', collected_value, NULL)) as z_range_top,
-        max(if(parameter_name = 'z_range_bottom', collected_value, NULL)) as z_range_bottom
-        
-        
-        -- max(if(parameter_name = 'ttv_despike_filtered', collected_value, NULL)) as ttv_despike,
+        max(if(parameter_name = 'max_thickness_despike_filtered', safe_cast(collected_value as float64), NULL)) as maxThick_raw
         from `df-mes.mes_warehouse.data_collection` dc
         join first_char on dc.sample_id = first_char.sample_id and dc.data_collection_complete_date < first_char.data_collection_complete_date + interval 10 minute
         join `df-max.raw_dfdb.blocks` blocks on dc.sample_id = blocks.id_block
-        join `df-max.raw_dfdb.block_dimensions` pbd on blocks.parent_id_block = pbd.id_block
         join `df-data-and-ai.trilliant_warehouse.New_seed_layer` nsl on dc.sample_id = nsl.id_block
-        left join `df-data-and-ai.trilliant_warehouse.TDL_laser_recipe` tgt on tgt.id_block = blocks.parent_id_block
+        join last_laser tgt on tgt.id_block = blocks.parent_id_block
         where dc.data_collection_complete_date > current_timestamp() - interval 7 day
         and parent_id_block is not null
         group by 1,2,3,4,5,6,7
@@ -108,6 +97,8 @@ with first_char as (select sample_id, min(data_collection_complete_date) as data
     case when time_terminated is not null then 1 else 0 end as Terminated, 
     case 
         when maxThick > 80 and minThick < -80 then 'Both'
+        when maxThick < -80 then 'AllMin'
+        when minThick > 80 then 'AllMax'
         when maxThick > 80 then 'Max'
         when minThick < -80  then 'Min'
         else NULL end as outlier_type
@@ -176,7 +167,63 @@ with first_char as (select sample_id, min(data_collection_complete_date) as data
                         ),
                         row=i+1, col=1
                     )
-                    # print(row['parent_rank'],  ' lower')
+                ####both max and min out of range
+                ## Plot as full blocks
+                # if row['outlier_type'] in [ 'AllMin']:
+                #     fig.add_trace(
+                #         go.Scatter(
+                #             x=[row['parent_rank'], row['parent_rank']],
+                #             y=[0-limit,0],
+                #             mode='lines',
+                #             line=dict(color='red', width=400/df_query_tdl_thickness_per_block['parent_rank'].max()),
+                #             showlegend=False
+                #         ),
+                #         row=i+1, col=1
+                #     )
+                # if row['outlier_type'] in ['AllMax']:
+                #     fig.add_trace(
+                #         go.Scatter(
+                #             x=[row['parent_rank'], row['parent_rank']],
+                #             y=[0,limit],
+                #             mode='lines',
+                #             line=dict(color='red', width=400/df_query_tdl_thickness_per_block['parent_rank'].max()),
+                #             showlegend=False
+                #         ),
+                #         row=i+1, col=1
+                #     )
+                ## plot as arrow
+                if row['outlier_type'] in ['AllMin']:
+                    fig.add_annotation(
+                        ax=row['parent_rank'],  # arrow start (same x)
+                        ay=limit*0.5,    
+                        x=row['parent_rank'],   # arrow tip (target)
+                        y=-limit,          
+                        xref=f'x{i+1}',
+                        yref=f'y{i+1}',
+                        axref=f'x{i+1}',
+                        ayref=f'y{i+1}',
+                        showarrow=True,
+                        arrowhead=2,
+                        arrowsize=1,
+                        arrowwidth=1.2,
+                        arrowcolor='red'
+                    )
+                if row['outlier_type'] in ['AllMax']:
+                    fig.add_annotation(
+                        ax=row['parent_rank'],  # arrow start (same x)
+                        ay=-limit*0.5,    
+                        x=row['parent_rank'],   # arrow tip (target)
+                        y=limit,          
+                        xref=f'x{i+1}',
+                        yref=f'y{i+1}',
+                        axref=f'x{i+1}',
+                        ayref=f'y{i+1}',
+                        showarrow=True,
+                        arrowhead=2,
+                        arrowsize=1,
+                        arrowwidth=1.2,
+                        arrowcolor='red'
+                    )
         
         # add reference line for large plate
         fig.add_shape(
