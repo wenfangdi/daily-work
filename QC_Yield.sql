@@ -35,11 +35,11 @@ all_rec_wa as (
         case 
             when 
               safe_divide(r.run_duration, r.requested_run_duration) > 0.95 
-              and r.clean_vol_240_210_cm3 < 74.3 and pr.clean_vol_240_210_cm3 < 74.3 
+              and r.clean_vol_240_210_cm3 < 76.4 and pr.clean_vol_240_210_cm3 < 76.4 
               and timestamp_diff( r.end_time,pr.end_time, day) < 60 then 'Advanced Low Yield'
-            when r.mean_incident_power > 41 and r.run_duration > 200 and r.mean_growth_rate < 9.486 then 'Advanced Low Yield'
-            when r.run_duration > 200 and r.mean_growth_rate > 10.2967 then 'Advanced Low Yield'
-            when safe_divide(r.run_duration, r.requested_run_duration) > 0.95 and r.clean_vol_240_210_cm3 < 74.3 then 'Basic Low Yield'
+            when r.mean_incident_power > 41 and r.run_duration > 200 and r.mean_growth_rate < 9.512 then 'Advanced Low Yield'
+            when r.run_duration > 200 and r.mean_growth_rate > 10.140 then 'Advanced Low Yield'
+            when safe_divide(r.run_duration, r.requested_run_duration) > 0.95 and r.clean_vol_240_210_cm3 < 76.4 then 'Basic Low Yield'
             else 'NA' end
       --Gen8 Seed
       when r.Gen = 'Gen8' and r.loading_purpose = 'Seed'
@@ -49,11 +49,11 @@ all_rec_wa as (
         case 
             when 
               safe_divide(r.run_duration, r.requested_run_duration) > 0.95 
-              and r.seed_yield_p < 0.786 and pr.seed_yield_p < 0.786
+              and r.seed_yield_p < 0.818 and pr.seed_yield_p < 0.818
               and timestamp_diff( r.end_time,pr.end_time, day) < 60 then 'Advanced Low Yield'
-            when r.mean_incident_power > 48 and r.run_duration > 200 and r.mean_growth_rate < 8.824 then 'Advanced Low Yield'
-            when r.run_duration > 200 and r.mean_growth_rate > 9.467 then 'Advanced Low Yield'
-            when safe_divide(r.run_duration, r.requested_run_duration) > 0.95 and r.seed_yield_p < 0.786 then 'Basic Low Yield'
+            when r.mean_incident_power > 48 and r.run_duration > 200 and r.mean_growth_rate < 8.766 then 'Advanced Low Yield'
+            when r.run_duration > 200 and r.mean_growth_rate > 9.570 then 'Advanced Low Yield'
+            when safe_divide(r.run_duration, r.requested_run_duration) > 0.95 and r.seed_yield_p < 0.818 then 'Basic Low Yield'
             else 'NA' end
       -- Gen8 Gem
       when r.Gen = 'Gen8' and r.loading_purpose = 'Production'
@@ -64,11 +64,11 @@ all_rec_wa as (
         case 
             when 
               safe_divide(r.run_duration, r.requested_run_duration) > 0.95 
-              and r.clean_vol_240_210_cm3 < 92.98 and pr.clean_vol_240_210_cm3 < 92.98
+              and r.clean_vol_240_210_cm3 < 91.6 and pr.clean_vol_240_210_cm3 < 91.6
               and timestamp_diff( r.end_time,pr.end_time, day) < 60 then 'Advanced Low Yield'
-            when r.mean_incident_power > 48.5 and r.run_duration > 200 and r.mean_growth_rate < 9.198 then 'Advanced Low Yield'
-            when r.run_duration > 200 and r.mean_growth_rate > 10.234 then 'Advanced Low Yield'
-            when safe_divide(r.run_duration, r.requested_run_duration) > 0.95 and r.clean_vol_240_210_cm3 < 92.98 then 'Basic Low Yield'
+            when r.mean_incident_power > 48.5 and r.run_duration > 200 and r.mean_growth_rate < 9.375 then 'Advanced Low Yield'
+            when r.run_duration > 200 and r.mean_growth_rate > 9.971 then 'Advanced Low Yield'
+            when safe_divide(r.run_duration, r.requested_run_duration) > 0.95 and r.clean_vol_240_210_cm3 < 91.6 then 'Basic Low Yield'
             else 'NA' end            
     else 'NA'
     END as reason,
@@ -83,11 +83,11 @@ all_rec_wa as (
         case 
             when 
               safe_divide(r.run_duration, r.requested_run_duration) > 0.95 
-              and r.clean_vol_240_210_cm3 < 74.3 and pr.clean_vol_240_210_cm3 < 74.3 
+              and r.clean_vol_240_210_cm3 < 76.4 and pr.clean_vol_240_210_cm3 < 76.4 
               and timestamp_diff( r.end_time,pr.end_time, day) < 60 then 'Advanced Low Yield -- low clean vol'
-            when r.mean_incident_power > 41 and r.run_duration > 200 and r.mean_growth_rate < 9.486 then 'Advanced Low Yield - low growth rate'
-            when r.run_duration > 200 and r.mean_growth_rate > 10.2967 then 'Advanced Low Yield - high growth rate'
-            when safe_divide(r.run_duration, r.requested_run_duration) > 0.95 and r.clean_vol_240_210_cm3 < 74.3 then 'Basic Low Yield - low clean vol'
+            when r.mean_incident_power > 41 and r.run_duration > 200 and r.mean_growth_rate < 9.512 then 'Advanced Low Yield - low growth rate'
+            when r.run_duration > 200 and r.mean_growth_rate > 10.140 then 'Advanced Low Yield - high growth rate'
+            when safe_divide(r.run_duration, r.requested_run_duration) > 0.95 and r.clean_vol_240_210_cm3 < 76.4 then 'Basic Low Yield - low clean vol'
             else 'NA' end
       --Gen8 Seed
       when r.Gen = 'Gen8' and r.loading_purpose = 'Seed'
@@ -97,11 +97,11 @@ all_rec_wa as (
         case 
             when 
               safe_divide(r.run_duration, r.requested_run_duration) > 0.95 
-              and r.seed_yield_p < 0.786 and pr.seed_yield_p < 0.786
+              and r.seed_yield_p < 0.818 and pr.seed_yield_p < 0.818
               and timestamp_diff( r.end_time,pr.end_time, day) < 60 then 'Advanced Low Yield'
-            when r.mean_incident_power > 48 and r.run_duration > 200 and r.mean_growth_rate < 8.824 then 'Advanced Low Yield - low growth rate'
-            when r.run_duration > 200 and r.mean_growth_rate > 9.467 then 'Advanced Low Yield - high growth rate'
-            when safe_divide(r.run_duration, r.requested_run_duration) > 0.95 and r.seed_yield_p < 0.786 then 'Basic Low Yield'
+            when r.mean_incident_power > 48 and r.run_duration > 200 and r.mean_growth_rate < 8.766 then 'Advanced Low Yield - low growth rate'
+            when r.run_duration > 200 and r.mean_growth_rate > 9.570 then 'Advanced Low Yield - high growth rate'
+            when safe_divide(r.run_duration, r.requested_run_duration) > 0.95 and r.seed_yield_p < 0.818 then 'Basic Low Yield'
             else 'NA' end
       -- Gen8 Gem
       when r.Gen = 'Gen8' and r.loading_purpose = 'Production'
@@ -112,11 +112,11 @@ all_rec_wa as (
         case 
             when 
               safe_divide(r.run_duration, r.requested_run_duration) > 0.95 
-              and r.clean_vol_240_210_cm3 < 92.98 and pr.clean_vol_240_210_cm3 < 92.98
+              and r.clean_vol_240_210_cm3 < 91.6 and pr.clean_vol_240_210_cm3 < 91.6
               and timestamp_diff( r.end_time,pr.end_time, day) < 60 then 'Advanced Low Yield - low clean vol'
-            when r.mean_incident_power > 48.5 and r.run_duration > 200 and r.mean_growth_rate < 9.198 then 'Advanced Low Yield - low growth rate'
-            when r.run_duration > 200 and r.mean_growth_rate > 10.234 then 'Advanced Low Yield - high growth rate'
-            when safe_divide(r.run_duration, r.requested_run_duration) > 0.95 and r.clean_vol_240_210_cm3 < 92.98 then 'Basic Low Yield - low clean vol'
+            when r.mean_incident_power > 48.5 and r.run_duration > 200 and r.mean_growth_rate < 9.375 then 'Advanced Low Yield - low growth rate'
+            when r.run_duration > 200 and r.mean_growth_rate > 9.971 then 'Advanced Low Yield - high growth rate'
+            when safe_divide(r.run_duration, r.requested_run_duration) > 0.95 and r.clean_vol_240_210_cm3 < 91.6 then 'Basic Low Yield - low clean vol'
             else 'NA' end            
     else 'NA'
     END as reason_explanation,
@@ -224,4 +224,3 @@ select * from all_rec_wa
 UNION ALL
 select * from all_rec_esp
 
--- where end_time > current_timestamp() - interval 3 day
