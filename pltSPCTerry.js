@@ -3,15 +3,21 @@ context.panel.data.series.forEach((s) => {
   const f_id = s.fields.find(f => f.name === 'id_block');
   const f_step = s.fields.find(f => f.name === 'd_step');
   const f_usl = s.fields.find(f => f.name === "product_upper_spec_limit");
+  const f_lsl = s.fields.find(f => f.name === "product_lower_spec_limit");
   const f_spec = s.fields.find(f => f.name === "spec_available");
   const f_v = s.fields.find(f => f.name === "v");
   const f_std = s.fields.find(f => f.name === "stddev_v");
 
   for (let i = 0; i < s.length; i++) {
+    const stepVal = f_step ? f_step.values[i] : '';
+    const uslVal = f_usl ? f_usl.values[i] : null;
+    const lslVal = f_lsl ? f_lsl.values[i] : null;
+
     all_data.push({
       id_block: f_id ? f_id.values[i] : null,
-      stepUsl: `${f_step ? f_step.values[i] : ''}  USL: ${f_usl ? f_usl.values[i] : ''}`,
-      usl: f_usl ? f_usl.values[i] : null,
+      groupKey: `${stepVal} | LSL: ${lslVal !== null ? lslVal : 'N/A'} | USL: ${uslVal !== null ? uslVal : 'N/A'}`,
+      usl: uslVal,
+      lsl: lslVal,
       spec_available: f_spec ? f_spec.values[i] : null,
       v: f_v ? f_v.values[i] : null,
       stddev_v: f_std ? f_std.values[i] : null,
@@ -19,9 +25,9 @@ context.panel.data.series.forEach((s) => {
   }
 });
 
-// Group data by step + USL
+// Group data by Step + USL + LSL
 const groups = all_data.reduce((acc, item) => {
-  const key = item.stepUsl;
+  const key = item.groupKey;
   if (!acc[key]) acc[key] = [];
   acc[key].push(item);
   return acc;
@@ -56,7 +62,7 @@ function generateHistogramWithGaussianSVG(values, binCount = 10) {
   });
 
   const maxCount = Math.max(...bins, 1);
-  const width = 270; // <--- Increased from 210 to match tooltip width
+  const width = 270;
   const height = 100;
   const chartBottom = height - 18;
   const maxBarHeight = height - 30;
@@ -75,10 +81,8 @@ function generateHistogramWithGaussianSVG(values, binCount = 10) {
   });
 
   // Calculate Gaussian Curve Points
-  // Normal PDF formula: f(x) = (1 / (stdDev * sqrt(2 * PI))) * exp(-0.5 * ((x - mean) / stdDev)^2)
-  // Scaled frequency height = n * binWidth * PDF(x)
   let pathPoints = [];
-  const steps = 50; // Points resolution for smooth curve
+  const steps = 50;
 
   if (stdDev > 0) {
     for (let i = 0; i <= steps; i++) {
@@ -89,7 +93,6 @@ function generateHistogramWithGaussianSVG(values, binCount = 10) {
       const px = (i / steps) * width;
       const py = chartBottom - (expectedCount / maxCount) * maxBarHeight;
 
-      // Clamp Y point within plot boundary
       const clampedY = Math.max(5, Math.min(chartBottom, py));
       pathPoints.push(`${i === 0 ? 'M' : 'L'} ${px.toFixed(1)} ${clampedY.toFixed(1)}`);
     }
@@ -118,9 +121,10 @@ const labels = [];
 const barSeriesData = [];
 const metricsMap = {};
 
-Object.keys(groups).forEach((stepUslKey) => {
-  const groupData = groups[stepUslKey];
+Object.keys(groups).forEach((groupKey) => {
+  const groupData = groups[groupKey];
   const currentUsl = groupData[0].usl;
+  const currentLsl = groupData[0].lsl;
   const specAvailable = groupData[0].spec_available;
 
   const validV = groupData.map(d => d.v).filter(v => v !== null && !isNaN(v));
@@ -138,17 +142,30 @@ Object.keys(groups).forEach((stepUslKey) => {
     metricValue = avgStdDev !== 0 ? ((currentUsl - meanV) / (3 * avgStdDev)) : 0;
   }
 
-  labels.push(stepUslKey);
+  // Calculate Cp = (USL - LSL) / (6 * sigma)
+  let cpValue = "N/A";
+  if (
+    currentUsl !== null && 
+    currentLsl !== null && 
+    currentUsl !== undefined && 
+    currentLsl !== undefined && 
+    avgStdDev > 0
+  ) {
+    cpValue = ((currentUsl - currentLsl) / (6 * avgStdDev)).toFixed(3);
+  }
+
+  labels.push(groupKey);
 
   barSeriesData.push({
-    name: stepUslKey,
-    value: [1, stepUslKey]
+    name: groupKey,
+    value: [1, groupKey]
   });
 
-  metricsMap[stepUslKey] = {
+  metricsMap[groupKey] = {
     count: groupData.length,
     metric: metricName,
     value: metricValue.toFixed(3),
+    cp: cpValue,
     mean: meanV.toFixed(3),
     rawValues: validV
   };
@@ -175,7 +192,7 @@ return {
       formatter: function (value) {
         const m = metricsMap[value];
         if (!m) return value;
-        return `${value} (n: ${m.count})\n${m.metric}: ${m.value} | Mean: ${m.mean}`;
+        return `${value} (n: ${m.count})\n${m.metric}: ${m.value} | Cp: ${m.cp} | Mean: ${m.mean}`;
       }
     }
   },
@@ -184,7 +201,7 @@ return {
     backgroundColor: 'rgba(20, 20, 25, 0.95)',
     borderColor: '#444',
     padding: 12,
-    extraCssText: 'width: 250px; max-width: 350px; box-sizing: border-box; white-space: normal;', // <--- Changed width from 200px to 300px to prevent overflow
+    extraCssText: 'width: 270px; max-width: 350px; box-sizing: border-box; white-space: normal;',
     textStyle: { color: '#fff' },
     formatter: function (params) {
       const key = params.name || (Array.isArray(params.value) ? params.value[1] : null);
@@ -198,7 +215,7 @@ return {
         <div style="font-family: Arial, sans-serif; font-size: 12px;">
           <strong style="color: #61afef; font-size: 13px;">${key}</strong><br/>
           <span style="color: #aaa;">Sample Size (n):</span> ${m.count}<br/>
-          <span style="color: #aaa;">${m.metric}:</span> ${m.value} | <span style="color: #aaa;">Mean:</span> ${m.mean}
+          <span style="color: #aaa;">${m.metric}:</span> ${m.value} | <span style="color: #aaa;">Cp:</span> ${m.cp} | <span style="color: #aaa;">Mean:</span> ${m.mean}
           <hr style="border: none; border-top: 1px solid #444; margin: 8px 0;" />
           <div style="font-weight: bold; margin-bottom: 2px;">
             Distribution & Gaussian Fit 
