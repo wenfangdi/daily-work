@@ -241,10 +241,19 @@ return {
 // SPC pre lap post lap batch trend
 let all_data = [];
 const groupedData = new Map();
-const ttv_threshold_pre_lap = 40;
-const range_of_mean_threshold_pre_lap = 20;
-const ttv_threshold_post_lap = 10;
-const range_of_mean_threshold_post_lap = 4;
+
+// Step-specific thresholds
+const thresholds = {
+  pre_lap: {
+    ttv: 40,
+    rangeOfMean: 20
+  },
+  post_lap: {
+    ttv: 10,
+    rangeOfMean: 4
+  }
+};
+
 const bodyTextColor = getComputedStyle(document.body).color;
 
 // 1. Parse and group your data across series using row index 'i'
@@ -252,7 +261,7 @@ context.panel.data.series.forEach((s) => {
   const f_batch = s.fields.find(f => f.name === 'Batch');
   const f_step = s.fields.find(f => f.name === 'd_step');
   const f_date = s.fields.find(f => f.name === 'date_key (max)');
-  const f_step_desc = s.fields.find(f => f.name === 'd_step_description'); // Grab the new field
+  const f_step_desc = s.fields.find(f => f.name === 'd_step_description');
   const f_parameter = s.fields.find(f => f.name === 'parameter_name');
   const f_vmax = s.fields.find(f => f.name === 'v (max)');
   const f_vmin = s.fields.find(f => f.name === 'v (min)');
@@ -276,8 +285,6 @@ context.panel.data.series.forEach((s) => {
     if (f_date) row.date = f_date.values[i];
     if (f_count) row.count = f_count.values[i];
 
-
-    // Concatenate Step name and Description safely if they exist
     if (f_step) {
       const stepName = f_step.values[i];
       const stepDesc = f_step_desc ? f_step_desc.values[i] : null;
@@ -329,12 +336,11 @@ const stepNames = Array.from(stepsMap.keys());
 const step1 = stepNames[0]; // pre lap
 const step2 = stepNames[1]; // post lap
 
-// Helper function to extract and sort candlestick data by date
-function getStepCandleData(stepName) {
+// Helper function to process step data with custom thresholds
+function getStepCandleData(stepName, ttvThreshold, rangeOfMeanThreshold) {
   const batchMap = stepsMap.get(stepName);
-  if (!batchMap) return { batches: [], dates: [], values: [] };
+  if (!batchMap) return { batches: [], dates: [], values: [], counts: [], labelData: [], ttvThreshold, rangeOfMeanThreshold };
 
-  // Convert map values to array and sort chronologically by date
   const sortedBatchList = Array.from(batchMap.values()).sort((a, b) => {
     if (!a.date) return 1;
     if (!b.date) return -1;
@@ -355,16 +361,13 @@ function getStepCandleData(stepName) {
     const ttv = data.max_of_max - data.min_of_min;
     const rangeOfMean = data.max_of_mean - data.min_of_mean;
 
+    // Wick Color evaluating against step-specific threshold
+    const wickColor = ttv > ttvThreshold ? '#ff2f1c' : '#48ad2b';
 
-    // 1. Wick Color (TTV > 40 -> Red, else Gray)
-    const wickColor = ttv > ttv_threshold_pre_lap ? '#ff2f1c' : '#48ad2b';
+    // Body Fill Color evaluating against step-specific threshold
+    const bodyColor = rangeOfMean > rangeOfMeanThreshold ? '#f39c12' : '#48ad2b';
 
-
-
-    // 2. Body Fill Color (Range of Mean > 20 -> Yellow, else Green)
-    const bodyColor = rangeOfMean > range_of_mean_threshold_pre_lap ? '#f39c12' : '#48ad2b';
     values.push({
-      // ECharts Candlestick format: [Open, Close, Lowest, Highest]
       value: [
         data.min_of_mean,  // Open
         data.max_of_mean,  // Close
@@ -372,11 +375,11 @@ function getStepCandleData(stepName) {
         data.max_of_max    // Highest
       ],
       itemStyle: {
-        color: bodyColor,         // Body fill when Open <= Close
-        color0: bodyColor,        // Body fill when Open > Close
-        borderColor: wickColor,   // Wick line and border color
-        borderColor0: wickColor,  // Wick line and border color
-        borderWidth: 2            // Make the wicks and border thick and clearly visible
+        color: bodyColor,
+        color0: bodyColor,
+        borderColor: wickColor,
+        borderColor0: wickColor,
+        borderWidth: 2
       }
     });
 
@@ -389,11 +392,12 @@ function getStepCandleData(stepName) {
     });
   });
 
-  return { batches, dates, values, counts, labelData };
+  return { batches, dates, values, counts, labelData, ttvThreshold, rangeOfMeanThreshold };
 }
 
-const step1Data = getStepCandleData(step1);
-const step2Data = getStepCandleData(step2);
+// Dedicated data processing per step with explicit thresholds
+const step1Data = getStepCandleData(step1, thresholds.pre_lap.ttv, thresholds.pre_lap.rangeOfMean);
+const step2Data = getStepCandleData(step2, thresholds.post_lap.ttv, thresholds.post_lap.rangeOfMean);
 
 // 4. Return ECharts option object
 return {
@@ -420,8 +424,9 @@ return {
       const item = params[0];
       if (!item || !item.value) return '';
 
-      // Determine dataset according to series index
-      const dataSet = item.seriesIndex === 0 ? step1Data : step2Data;
+      const isStep1 = item.seriesIndex === 0 || item.seriesIndex === 2;
+      const dataSet = isStep1 ? step1Data : step2Data;
+
       const dateVal = dataSet.dates[item.dataIndex] || 'N/A';
       const count = dataSet.counts[item.dataIndex] ?? 'N/A';
 
@@ -430,9 +435,9 @@ return {
       const ttv = highest - lowest;
       const rangeOfMean = close - open;
 
-      // Calculate dynamic colors matching your threshold logic
-      const ttvColor = ttv > ttv_threshold_pre_lap ? '#ff2f1c' : '#48ad2b';
-      const rangeColor = rangeOfMean > range_of_mean_threshold_pre_lap ? '#f39c12' : '#48ad2b';
+      // Color highlight using the step's specific thresholds
+      const ttvColor = ttv > dataSet.ttvThreshold ? '#ff2f1c' : '#48ad2b';
+      const rangeColor = rangeOfMean > dataSet.rangeOfMeanThreshold ? '#f39c12' : '#48ad2b';
 
       return `
         <strong>Batch: ${item.name}</strong><br/>
@@ -448,8 +453,8 @@ return {
     }
   },
   grid: [
-    { left: '7%', right: '53%', top: '12%', bottom: '15%' }, // Left chart (Step 1)
-    { left: '55%', right: '5%', top: '12%', bottom: '15%' }  // Right chart (Step 2)
+    { left: '7%', right: '53%', top: '12%', bottom: '15%' },
+    { left: '55%', right: '5%', top: '12%', bottom: '15%' }
   ],
   xAxis: [
     {
@@ -507,22 +512,16 @@ return {
       yAxisIndex: 0,
       data: step1Data.labelData,
       symbolSize: 1,
-      itemStyle: {
-        color: 'Black'
-      },
+      itemStyle: { color: 'black' },
       label: {
         show: true,
         position: 'inside',
-        formatter: function (params) {
-          return params.data.count ?? '';
-        },
+        formatter: (params) => params.data.count ?? '',
         color: 'black',
         fontSize: 10,
         fontWeight: 'bold'
       },
-      tooltip: {
-        show: false
-      },
+      tooltip: { show: false },
       z: 10
     },
     {
@@ -532,22 +531,15 @@ return {
       yAxisIndex: 1,
       data: step2Data.labelData,
       symbolSize: 1,
-      itemStyle: {
-        color: 'transparent'
-      },
+      itemStyle: { color: 'transparent' },
       label: {
         show: true,
         position: 'inside',
-        formatter: function (params) {
-          return params.data.count ?? '';
-        },
+        formatter: (params) => params.data.count ?? '',
         color: 'black',
-        fontSize: 10,
-        // fontWeight: 'bold'
+        fontSize: 10
       },
-      tooltip: {
-        show: false
-      },
+      tooltip: { show: false },
       z: 10
     }
   ]
